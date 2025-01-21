@@ -1,0 +1,71 @@
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
+
+* {
+  margin: 0;
+}
+
+
+body {
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  background-color: #202020;
+  overflow: hidden;
+  padding: 0;
+  margin: 0;
+}
+
+html {
+  overflow: hidden;
+  padding: 0;
+  margin: 0;
+}
+
+
+img,
+picture,
+video,
+canvas,
+svg {
+  max-width: 100%;
+  max-height: 95vh;
+}
+
+
+input,
+button,
+textarea,
+select {
+  font: inherit;
+}
+
+
+p,
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  overflow-wrap: break-word;
+}
+
+
+#root,
+#__next {
+  isolation: isolate;
+}
+
+#canvas {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  margin: auto;
+  border: white 1px solid;
+}

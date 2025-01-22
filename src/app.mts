@@ -1,6 +1,6 @@
 import { m4, createProgramInfo, setBuffersAndAttributes, setUniforms, drawBufferInfo, createBufferInfoFromArrays, createTexture } from "twgl.js";
 
-const gl_canvas = document.getElementById("canvas") as HTMLCanvasElement | null;
+const gl_canvas = document.getElementById("gl_canvas") as HTMLCanvasElement | null;
 if (!gl_canvas) throw new Error("No canvas found");
 const gl = gl_canvas.getContext("webgl2");
 if (!gl) {
@@ -107,65 +107,195 @@ const draw_image = (tex: WebGLTexture, tex_width: number, tex_height: number, de
     drawBufferInfo(gl, buffer_info, gl.TRIANGLES);
 };
 
-const canvas = document.createElement("canvas");
-canvas.width = gl_canvas.width;
-canvas.height = gl_canvas.height;
-const ctx = canvas.getContext("2d");
-if (!ctx) throw new Error("no ctx >.> idk vro");
+const monitor_screen_canvas = document.createElement("canvas");
+monitor_screen_canvas.width = gl_canvas.width;
+monitor_screen_canvas.height = gl_canvas.height;
+const monitor_ctx = monitor_screen_canvas.getContext("2d");
+if (!monitor_ctx) throw new Error("no ctx >.> idk vro");
 
-let draw_background_img: Function | null = null;
+const screen_left = 100;
+const screen_right = monitor_screen_canvas.width - 100;
+const screen_bottom = monitor_screen_canvas.height - 100;
+const screen_height = monitor_screen_canvas.height - 200;
+const screen_width = monitor_screen_canvas.width - 200;
+
+let draw_screen_img: Function | null = null;
 const screen_components: Record<string, Function> = {
     taskbar: () => {
+        monitor_ctx.save();
         // draw taskbar base
-        ctx.beginPath();
-        ctx.fillStyle = "#225AD9";
-        ctx.fillRect(0, canvas.height - (canvas.height * 0.05), canvas.width, canvas.height);
-        ctx.closePath();
+        monitor_ctx.beginPath();
+        monitor_ctx.fillStyle = "#225AD9";
+        monitor_ctx.fillRect(screen_left, screen_bottom - (screen_height * 0.05), screen_width, screen_height * 0.05);
+        monitor_ctx.closePath();
+        monitor_ctx.restore();
 
+        // draw highlights
+        monitor_ctx.save();
+        monitor_ctx.beginPath();
+        // upper white highlight
+        monitor_ctx.moveTo(screen_left, screen_bottom - (screen_height * 0.05));
+        monitor_ctx.lineTo(screen_width, screen_bottom - (screen_height * 0.05));
+        monitor_ctx.shadowBlur = 2;
+        monitor_ctx.shadowColor = "white";
+        monitor_ctx.shadowOffsetY = 2;
+        monitor_ctx.strokeStyle = "#225AD9";
+        monitor_ctx.stroke();
+        monitor_ctx.closePath();
+        // lower dark highlight
+        monitor_ctx.beginPath();
+        monitor_ctx.moveTo(screen_left, screen_bottom);
+        monitor_ctx.lineTo(screen_width, screen_bottom);
+        monitor_ctx.shadowBlur = 1;
+        monitor_ctx.shadowColor = "gray";
+        monitor_ctx.shadowOffsetY = -1;
+        monitor_ctx.strokeStyle = "white";
+        monitor_ctx.stroke();
+        monitor_ctx.restore();
+
+        monitor_ctx.save();
         // draw start button
-        ctx.beginPath();
-        ctx.fillStyle = "#3BA83B";
-        ctx.fillRect(0, canvas.height - (canvas.height * 0.05), canvas.width * 0.1, canvas.height);
-        ctx.closePath();
+        monitor_ctx.beginPath();
+        monitor_ctx.fillStyle = "#3BA83B";
+        monitor_ctx.fillRect(screen_left, screen_bottom - (screen_height * 0.05), screen_width * 0.1, screen_height * 0.05);
+        monitor_ctx.closePath();
         // draw start button chip
-        ctx.beginPath();
-        ctx.fillStyle = "#3BA83B";
-        ctx.moveTo(canvas.width * 0.1, canvas.height - (canvas.height * 0.05));
-        ctx.arcTo(canvas.width * 0.125, canvas.height - (canvas.height * 0.025), canvas.width * 0.1, canvas.height, canvas.width * 0.03);
-        ctx.lineTo(canvas.width * 0.1, canvas.height);
-        ctx.fill();
-        ctx.closePath();
+        monitor_ctx.beginPath();
+        monitor_ctx.fillStyle = "#3BA83B";
+        monitor_ctx.moveTo(screen_left + screen_width * 0.1, screen_bottom - (screen_height * 0.05));
+        monitor_ctx.arcTo(
+            screen_left + screen_width * 0.125,
+            screen_bottom - (screen_height * 0.025),
+            screen_left + screen_width * 0.1,
+            screen_bottom,
+            screen_width * 0.025
+        );
+        monitor_ctx.lineTo(screen_left + screen_width * 0.1, screen_bottom);
+        monitor_ctx.fill();
+        monitor_ctx.strokeStyle = "#1F4BA8";
+        monitor_ctx.stroke();
+        monitor_ctx.shadowColor = "white";
+        monitor_ctx.shadowBlur = 10;
+        monitor_ctx.shadowOffsetX = 1;
+        monitor_ctx.closePath();
+        monitor_ctx.restore();
 
+        // start button highlight
+        // top light
+        monitor_ctx.save();
+        monitor_ctx.beginPath();
+        monitor_ctx.moveTo(screen_left, screen_bottom - (screen_height * 0.05));
+        monitor_ctx.lineTo(screen_left + screen_width * 0.1, screen_bottom - (screen_height * 0.05));
+        monitor_ctx.shadowBlur = 2;
+        monitor_ctx.shadowColor = "white";
+        monitor_ctx.shadowOffsetY = 2;
+        monitor_ctx.strokeStyle = "#3BA83B";
+        monitor_ctx.stroke();
+        monitor_ctx.closePath();
+        // left light
+        monitor_ctx.beginPath();
+        monitor_ctx.moveTo(screen_left, screen_bottom - (screen_height * 0.05));
+        monitor_ctx.lineTo(screen_left, screen_bottom - (screen_height * 0.025));
+        monitor_ctx.shadowBlur = 2;
+        monitor_ctx.shadowColor = "white";
+        monitor_ctx.shadowOffsetX = 2;
+        monitor_ctx.strokeStyle = "#3BA83B";
+        monitor_ctx.stroke();
+        monitor_ctx.closePath();
+        // bottom dark
+        monitor_ctx.beginPath();
+        monitor_ctx.moveTo(screen_left, screen_bottom);
+        monitor_ctx.lineTo(screen_left + screen_width * 0.1, screen_bottom);
+        monitor_ctx.shadowBlur = 1;
+        monitor_ctx.shadowColor = "gray";
+        monitor_ctx.shadowOffsetY = -1;
+        monitor_ctx.strokeStyle = "#3BA83B";
+        monitor_ctx.stroke();
+        monitor_ctx.closePath();
+        monitor_ctx.restore();
+
+        monitor_ctx.save();
+        // start button text
+        monitor_ctx.font = "italic 36px Franklin Gothic";
+        monitor_ctx.fillStyle = "#FFFFFF";
+        monitor_ctx.shadowColor = "black";
+        monitor_ctx.shadowBlur = 7;
+        monitor_ctx.shadowOffsetY = 2;
+        monitor_ctx.shadowOffsetX = 2;
+        monitor_ctx.fillText("start", screen_left + (screen_width * 0.1) * 0.3, screen_bottom - (screen_height * 0.015));
+        monitor_ctx.restore();
+
+
+        monitor_ctx.save();
         // draw system tray
-        ctx.beginPath();
-        ctx.fillStyle = "#1286E2";
-        ctx.fillRect(canvas.width - (canvas.width * 0.125), canvas.height - (canvas.height * 0.05), canvas.width, canvas.height);
-        ctx.closePath();
+        monitor_ctx.beginPath();
+        monitor_ctx.fillStyle = "#1286E2";
+        monitor_ctx.fillRect(
+            screen_right - (screen_width * 0.125),
+            screen_bottom - (screen_height * 0.05),
+            screen_width * 0.125, screen_height * 0.05
+        );
+        // separator vertical line
+        monitor_ctx.moveTo(screen_right - (screen_width * 0.125), screen_bottom - (screen_height * 0.05));
+        monitor_ctx.lineTo(screen_right - (screen_width * 0.125), screen_bottom);
+        monitor_ctx.stroke();
+        monitor_ctx.closePath();
+
+        // top light
+        monitor_ctx.beginPath();
+        monitor_ctx.moveTo(screen_right - (screen_width * 0.125), screen_bottom - (screen_height * 0.05));
+        monitor_ctx.lineTo(screen_right, screen_bottom - (screen_height * 0.05));
+        monitor_ctx.strokeStyle = "#1286E2";
+        monitor_ctx.shadowBlur = 2;
+        monitor_ctx.shadowColor = "white";
+        monitor_ctx.shadowOffsetY = 2;
+        monitor_ctx.stroke();
+        monitor_ctx.closePath();
+        // left light
+        monitor_ctx.beginPath();
+        monitor_ctx.moveTo(screen_right - (screen_width * 0.125), screen_bottom - (screen_height * 0.05));
+        monitor_ctx.lineTo(screen_right - (screen_width * 0.125), screen_bottom);
+        monitor_ctx.strokeStyle = "#1286E2";
+        monitor_ctx.shadowBlur = 2;
+        monitor_ctx.shadowColor = "white";
+        monitor_ctx.shadowOffsetX = 2;
+        monitor_ctx.stroke();
+        monitor_ctx.closePath();
+        // bottom dark
+        monitor_ctx.beginPath();
+        monitor_ctx.moveTo(screen_right - (screen_width * 0.125), screen_bottom);
+        monitor_ctx.lineTo(screen_right, screen_bottom);
+        monitor_ctx.strokeStyle = "#1286E2";
+        monitor_ctx.shadowBlur = 1;
+        monitor_ctx.shadowColor = "gray";
+        monitor_ctx.shadowOffsetY = -1;
+        monitor_ctx.stroke();
+        monitor_ctx.closePath();
+        monitor_ctx.restore();
     }
 };
 
-const img = new Image();
+const screen_img = new Image();
 const render = () => {
-    if (!draw_background_img) return;
+    if (!draw_screen_img) return;
 
-    draw_background_img();
+    draw_screen_img();
 
     Object.entries(screen_components).forEach(kv => {
         if (typeof kv[1] === "function") {
             kv[1]();
         }
     });
-    const tex = createTexture(gl, { src: canvas });
+    const tex = createTexture(gl, { src: monitor_screen_canvas });
     // render the opengl texture
-    draw_image(tex, img.width, img.height, 0, 0, gl_canvas.width, gl_canvas.height);
+    draw_image(tex, screen_img.width, screen_img.height, 0, 0, gl_canvas.width, gl_canvas.height);
 };
 
 
-
-img.src = "assets/bliss.jpg";
-img.onload = () => {
+screen_img.src = "assets/monitor.png";
+screen_img.onload = () => {
     // draw to the canvas and render all the buttons and stuff then pass it through the shaders and re-render
-    draw_background_img = () => ctx.drawImage(img, 0, 0, img.width, img.height, 0, 0, canvas.width, canvas.height);
+    draw_screen_img = () => monitor_ctx.drawImage(screen_img, 0, 0, screen_img.width, screen_img.height, 0, 0, monitor_screen_canvas.width, monitor_screen_canvas.height);
     render();
 };
-img.onerror = console.error;
+screen_img.onerror = console.error;

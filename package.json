@@ -21,6 +21,7 @@
     "webpack-cli": "^6.0.1"
   },
   "dependencies": {
+    "inset.js": "^1.0.2",
     "twgl.js": "^5.5.4"
   }
 }

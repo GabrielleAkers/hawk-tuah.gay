@@ -311,7 +311,13 @@ screen_cursor_img.src = "assets/default_arrow.cur";
 screen_cursor_img.onload = () => {
     draw_screen_cursor = () => {
         if (screen_cursor_pos[0] !== null && screen_cursor_pos[1] !== null) {
+            monitor_ctx.save();
+            monitor_ctx.shadowBlur = 2;
+            monitor_ctx.shadowColor = "black";
+            monitor_ctx.shadowOffsetX = 2;
+            monitor_ctx.shadowOffsetY = 2;
             monitor_ctx.drawImage(screen_cursor_img, screen_cursor_pos[0], screen_cursor_pos[1]);
+            monitor_ctx.restore();
         }
     };
 };

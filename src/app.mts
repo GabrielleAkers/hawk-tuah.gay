@@ -114,12 +114,15 @@ const monitor_ctx = monitor_screen_canvas.getContext("2d");
 if (!monitor_ctx) throw new Error("no ctx >.> idk vro");
 
 const screen_left = 100;
+const screen_top = 100;
 const screen_right = monitor_screen_canvas.width - 100;
 const screen_bottom = monitor_screen_canvas.height - 100;
 const screen_height = monitor_screen_canvas.height - 200;
 const screen_width = monitor_screen_canvas.width - 200;
 
 let draw_screen_img: Function | null = null;
+let screen_cursor_pos: [number, number] | [null, null] = [null, null];
+let draw_screen_cursor: Function | null = null;
 const screen_components: Record<string, Function> = {
     taskbar: () => {
         monitor_ctx.save();
@@ -275,7 +278,6 @@ const screen_components: Record<string, Function> = {
     }
 };
 
-const screen_img = new Image();
 const render = () => {
     if (!draw_screen_img) return;
 
@@ -286,12 +288,16 @@ const render = () => {
             kv[1]();
         }
     });
+
+    if (draw_screen_cursor) {
+        draw_screen_cursor();
+    }
     const tex = createTexture(gl, { src: monitor_screen_canvas });
     // render the opengl texture
-    draw_image(tex, screen_img.width, screen_img.height, 0, 0, gl_canvas.width, gl_canvas.height);
+    draw_image(tex, monitor_screen_canvas.width, monitor_screen_canvas.height, 0, 0, gl_canvas.width, gl_canvas.height);
 };
 
-
+const screen_img = new Image();
 screen_img.src = "assets/monitor.png";
 screen_img.onload = () => {
     // draw to the canvas and render all the buttons and stuff then pass it through the shaders and re-render
@@ -299,3 +305,41 @@ screen_img.onload = () => {
     render();
 };
 screen_img.onerror = console.error;
+
+const screen_cursor_img = new Image();
+screen_cursor_img.src = "assets/default_arrow.cur";
+screen_cursor_img.onload = () => {
+    draw_screen_cursor = () => {
+        if (screen_cursor_pos[0] !== null && screen_cursor_pos[1] !== null) {
+            monitor_ctx.drawImage(screen_cursor_img, screen_cursor_pos[0], screen_cursor_pos[1]);
+        }
+    };
+};
+
+const get_canvas_rel_mouse_pos = (evt: MouseEvent, target: HTMLCanvasElement) => {
+    target = target || evt.target;
+    const rect = target.getBoundingClientRect();
+    const pos = {
+        x: evt.clientX - rect.left,
+        y: evt.clientY - rect.top
+    };
+
+    pos.x = pos.x * target.width / target.clientWidth;
+    pos.y = pos.y * target.height / target.clientHeight;
+    return pos;
+};
+
+window.addEventListener("mousemove", evt => {
+    const pos = get_canvas_rel_mouse_pos(evt, gl_canvas);
+    if (pos.x > screen_left - 12 && pos.x < screen_right - 15 && pos.y > screen_top - 12 && pos.y < screen_bottom - 32) {
+        screen_cursor_pos = [pos.x, pos.y];
+        render();
+    }
+    else
+        screen_cursor_pos = [null, null];
+});
+
+gl_canvas.onmouseleave = () => {
+    screen_cursor_pos = [null, null];
+    render();
+};

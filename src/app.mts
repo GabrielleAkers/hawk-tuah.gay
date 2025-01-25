@@ -83,15 +83,14 @@ const arrays = {
 
 const buffer_info = createBufferInfoFromArrays(gl, arrays);
 
+gl.useProgram(program_info.program);
+setBuffersAndAttributes(gl, program_info, buffer_info);
+
 const draw_image = (tex: WebGLTexture, tex_width: number, tex_height: number, dest_x: number, dest_y: number, dest_width: number, dest_height: number) => {
     if (dest_width === undefined)
         dest_width = tex_width;
     if (dest_height === undefined)
         dest_height = tex_height;
-
-    gl.useProgram(program_info.program);
-
-    setBuffersAndAttributes(gl, program_info, buffer_info);
 
     // convert the quad to clip space :)
     let mat = m4.ortho(0, gl.canvas.width, gl.canvas.height, 0, -1, 1);

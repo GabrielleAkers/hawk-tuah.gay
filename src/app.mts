@@ -100,7 +100,7 @@ const draw_image = (tex: WebGLTexture, tex_width: number, tex_height: number, de
     const uniforms = {
         u_texture: tex,
         u_matrix: mat,
-        u_barrel_power: 1.4,
+        u_barrel_power: 1.3,
     };
     setUniforms(program_info, uniforms);
     drawBufferInfo(gl, buffer_info, gl.TRIANGLES);
@@ -164,7 +164,7 @@ let draw_screen_img: Function | null = null;
 let screen_cursor_pos: [number, number] | [null, null] = [null, null];
 let draw_screen_cursor: Function | null = null;
 
-let game_server_info: { info: { name: string, game: string, players: number, maxPlayers: number; }, players: { playerCount: number, players: string[]; }; } | null = null;
+let game_server_info: { info: { name: string, game: string, players: number, maxPlayers: number; }, players: { playerCount: number, players: { name: string; }[]; }; } | null = null;
 let game_info_showing = false;
 
 const screen_components: Record<string, Function> = {
@@ -555,8 +555,37 @@ const screen_components: Record<string, Function> = {
             monitor_ctx.font = "18pt Segoe UI";
             if (game_server_info && game_server_info["info"]) {
                 monitor_ctx.fillText(`Game: ${game_server_info["info"]["game"]}`, txt_x, txt_y_base + 24);
-                monitor_ctx.fillText(`World Name: ${game_server_info["info"]["name"]}`, txt_x, txt_y_base + 60, screen_width / 3 - 24);
+                monitor_ctx.fillText(`Server Name: ${game_server_info["info"]["name"]}`, txt_x, txt_y_base + 60, screen_width / 3 - 24);
                 monitor_ctx.fillText(`Players: ${game_server_info["info"]["players"]}/${game_server_info["info"]["maxPlayers"]}`, txt_x, txt_y_base + 96);
+                if (game_server_info["players"]) {
+                    monitor_ctx.beginPath();
+                    monitor_ctx.moveTo(txt_x, txt_y_base + 108);
+                    monitor_ctx.lineTo(2 * screen_width / 3 - 12, txt_y_base + 108);
+                    monitor_ctx.strokeStyle = "gray";
+                    monitor_ctx.stroke();
+                    monitor_ctx.closePath();
+                    const max_line_width = screen_width / 3 - 24;
+                    monitor_ctx.fillStyle = "black";
+                    monitor_ctx.font = "16pt Segoe UI";
+                    const lines: string[] = [];
+                    let line = "";
+                    const tmp_players = game_server_info["players"]["players"];
+                    game_server_info["players"]["players"].forEach((p, i) => {
+                        if (monitor_ctx.measureText(line + `${p.name}`).width >= max_line_width) {
+                            lines.push(line);
+                            line = "";
+                            tmp_players.splice(0, i);
+                        }
+                        line = line + `${p.name},`;
+                    });
+                    lines.push(tmp_players.map(p => p.name).join(","));
+                    let line_y = txt_y_base + 132;
+
+                    lines.forEach(l => {
+                        monitor_ctx.fillText(l, txt_x, line_y, max_line_width);
+                        line_y = line_y + 24;
+                    });
+                }
             } else {
                 monitor_ctx.fillText("Loading game info....", txt_x, txt_y_base + 24);
             }

@@ -156,9 +156,17 @@ icon_images["github_icon"] = new Image();
 icon_images["github_icon"].src = "assets/github_icon.png";
 icon_images["github_icon"].onerror = console.error;
 
+icon_images["game_info_icon"] = new Image();
+icon_images["game_info_icon"].src = "assets/game_info_icon.png";
+icon_images["game_info_icon"].onerror = console.error;
+
 let draw_screen_img: Function | null = null;
 let screen_cursor_pos: [number, number] | [null, null] = [null, null];
 let draw_screen_cursor: Function | null = null;
+
+let game_server_info: { info: { name: string, game: string, players: number, maxPlayers: number; }, players: { playerCount: number, players: string[]; }; } | null = null;
+let game_info_showing = false;
+
 const screen_components: Record<string, Function> = {
     taskbar: () => {
         // draw taskbar base
@@ -363,6 +371,27 @@ const screen_components: Record<string, Function> = {
             }
         });
 
+        register_icon("game_info_icon", {
+            text: "GameServer",
+            render_art: (x, y) => {
+                monitor_ctx.drawImage(icon_images["game_info_icon"], x, y, 2 * icon_size / 3, 2 * icon_size / 3);
+            },
+            render_text: (x, y) => {
+                monitor_ctx.save();
+                monitor_ctx.fillStyle = "white";
+                monitor_ctx.font = "20px Segoe UI";
+                monitor_ctx.shadowBlur = 1;
+                monitor_ctx.shadowOffsetY = 1;
+                monitor_ctx.shadowColor = "black";
+                monitor_ctx.fillText("GameServer", x - 14, y, icon_size);
+                monitor_ctx.restore();
+            },
+            link_behavior: async () => {
+                game_info_showing = true;
+                game_server_info = await ((await fetch("http://games.hawk-tuah.gay:25555/status")).json());
+            }
+        });
+
         let icons_col = 0;
         Object.entries(icons).forEach((kv, i) => {
             icons_col = Math.floor(i / max_icons_col);
@@ -399,6 +428,141 @@ const screen_components: Record<string, Function> = {
             });
             clickables[kv[0]].render();
         });
+    },
+    server_info_window: () => {
+        monitor_ctx.save();
+        if (game_info_showing) {
+            // top bar
+            monitor_ctx.save();
+            monitor_ctx.beginPath();
+            monitor_ctx.fillStyle = "#225AD9";
+            monitor_ctx.fillRect(screen_width / 3 + 2, screen_height / 3 + 2, screen_width / 3 - 2, screen_height * 0.05);
+            monitor_ctx.closePath();
+            monitor_ctx.restore();
+            // draw highlights
+            // upper white highlight
+            monitor_ctx.save();
+            monitor_ctx.beginPath();
+            monitor_ctx.moveTo(screen_width / 3 + 2, screen_height / 3 + 2);
+            monitor_ctx.lineTo(2 * screen_width / 3 - 2, screen_height / 3);
+            monitor_ctx.shadowBlur = 2;
+            monitor_ctx.shadowColor = "white";
+            monitor_ctx.shadowOffsetY = 2;
+            monitor_ctx.strokeStyle = "#225AD9";
+            monitor_ctx.stroke();
+            monitor_ctx.closePath();
+            // lower white highlight
+            monitor_ctx.save();
+            monitor_ctx.beginPath();
+            monitor_ctx.moveTo(screen_width / 3, screen_height / 3 + screen_height * 0.05 - 2);
+            monitor_ctx.lineTo(2 * screen_width / 3, screen_height / 3 + screen_height * 0.05 - 2);
+            monitor_ctx.shadowBlur = 4;
+            monitor_ctx.shadowColor = "white";
+            monitor_ctx.shadowOffsetY = 1;
+            monitor_ctx.strokeStyle = "#225AD9";
+            monitor_ctx.stroke();
+            monitor_ctx.closePath();
+            // lower dark highlight
+            monitor_ctx.beginPath();
+            monitor_ctx.moveTo(screen_width / 3, screen_height / 3 + screen_height * 0.05);
+            monitor_ctx.lineTo(2 * screen_width / 3, screen_height / 3 + screen_height * 0.05);
+            monitor_ctx.shadowBlur = 1;
+            monitor_ctx.shadowColor = "gray";
+            monitor_ctx.shadowOffsetY = -1;
+            monitor_ctx.strokeStyle = "#225AD9";
+            monitor_ctx.stroke();
+            monitor_ctx.restore();
+
+            // frame
+            monitor_ctx.save();
+            monitor_ctx.beginPath();
+            monitor_ctx.strokeStyle = "#225AD9";
+            monitor_ctx.roundRect(screen_width / 3, screen_height / 3, screen_width / 3, screen_height / 3, 10);
+            monitor_ctx.stroke();
+            monitor_ctx.closePath();
+            monitor_ctx.restore();
+
+            // frame label
+            monitor_ctx.save();
+            monitor_ctx.fillStyle = "white";
+            monitor_ctx.font = "24pt Franklin Gothic";
+            monitor_ctx.fillText("Currently playing :)", screen_width / 3 + 12, screen_height / 3 + screen_height * 0.035);
+            monitor_ctx.restore();
+
+            // close button
+            register_clickable("close_info_window_btn", {
+                x0: 2 * screen_width / 3 - 42,
+                y0: screen_height / 3 + 6,
+                x1: 2 * screen_width / 3 - 6,
+                y1: screen_height / 3 + 42,
+                current_color: "#FF0000",
+                start_color: "#FF0000",
+                render: color => {
+                    const x = clickables["close_info_window_btn"].x0;
+                    const y = clickables["close_info_window_btn"].y0;
+                    const w = clickables["close_info_window_btn"].x1 - x;
+                    const h = clickables["close_info_window_btn"].y1 - y;
+                    monitor_ctx.save();
+                    monitor_ctx.beginPath();
+                    monitor_ctx.fillStyle = color || clickables["close_info_window_btn"].current_color;
+                    monitor_ctx.strokeStyle = "white";
+                    monitor_ctx.roundRect(x, y, w, h, 8);
+                    monitor_ctx.fill();
+                    monitor_ctx.stroke();
+                    monitor_ctx.closePath();
+                    monitor_ctx.beginPath();
+                    monitor_ctx.moveTo(x + 6, y + 6);
+                    monitor_ctx.lineTo(x + w - 6, y + h - 6);
+                    monitor_ctx.strokeStyle = "white";
+                    monitor_ctx.lineWidth = 4;
+                    monitor_ctx.stroke();
+                    monitor_ctx.closePath();
+                    monitor_ctx.beginPath();
+                    monitor_ctx.moveTo(x + w - 6, y + 6);
+                    monitor_ctx.lineTo(x + 6, y + h - 6);
+                    monitor_ctx.stroke();
+                    monitor_ctx.closePath();
+                    monitor_ctx.restore();
+                },
+                on_mousedown: () => {
+                    if (game_info_showing) {
+                        clickables["close_info_window_btn"].current_color = "#770000";
+                        clickables["close_info_window_btn"].render();
+                    }
+                },
+                on_mouseup: () => {
+                    if (game_info_showing) {
+                        game_info_showing = false;
+                        clickables["close_info_window_btn"].current_color = clickables["close_info_window_btn"].start_color;
+                        clickables["close_info_window_btn"].render();
+                    }
+                }
+            });
+            clickables["close_info_window_btn"].render();
+
+            // text panel
+            monitor_ctx.save();
+            monitor_ctx.beginPath();
+            monitor_ctx.fillStyle = "white";
+            monitor_ctx.fillRect(screen_width / 3, screen_height / 3 + screen_height * 0.05, screen_width / 3, screen_height / 3);
+            monitor_ctx.closePath();
+            monitor_ctx.restore();
+
+            const txt_x = screen_width / 3 + 12;
+            const txt_y_base = screen_height / 3 + screen_height * 0.05 + 12;
+            monitor_ctx.save();
+            monitor_ctx.fillStyle = "black";
+            monitor_ctx.font = "18pt Segoe UI";
+            if (game_server_info && game_server_info["info"]) {
+                monitor_ctx.fillText(`Game: ${game_server_info["info"]["game"]}`, txt_x, txt_y_base + 24);
+                monitor_ctx.fillText(`World Name: ${game_server_info["info"]["name"]}`, txt_x, txt_y_base + 60, screen_width / 3 - 24);
+                monitor_ctx.fillText(`Players: ${game_server_info["info"]["players"]}/${game_server_info["info"]["maxPlayers"]}`, txt_x, txt_y_base + 96);
+            } else {
+                monitor_ctx.fillText("Loading game info....", txt_x, txt_y_base + 24);
+            }
+            monitor_ctx.restore();
+        }
+        monitor_ctx.restore();
     }
 };
 
@@ -474,7 +638,7 @@ let last_clicked = "";
 window.addEventListener("mousedown", evt => {
     const pos = get_canvas_rel_mouse_pos(evt, gl_canvas);
     Object.entries(clickables).forEach(kv => {
-        if (pos.x > kv[1].x0 - 12 && pos.x < kv[1].x1 - 31 && pos.y > kv[1].y0 - 12 && pos.y < kv[1].y1) {
+        if (pos.x > kv[1].x0 - 12 && pos.x < kv[1].x1 - 12 && pos.y > kv[1].y0 - 12 && pos.y < kv[1].y1 - 16) {
             last_clicked = kv[0];
             kv[1].on_mousedown();
             render();
@@ -485,7 +649,7 @@ window.addEventListener("mousedown", evt => {
 window.addEventListener("mouseup", evt => {
     const pos = get_canvas_rel_mouse_pos(evt, gl_canvas);
     Object.entries(clickables).forEach(kv => {
-        if (pos.x > kv[1].x0 && pos.x < kv[1].x1 && pos.y > kv[1].y0 && pos.y < kv[1].y1) {
+        if (pos.x > kv[1].x0 - 12 && pos.x < kv[1].x1 - 12 && pos.y > kv[1].y0 - 12 && pos.y < kv[1].y1 - 16) {
             if (last_clicked === kv[0]) {
                 kv[1].on_mouseup();
             }

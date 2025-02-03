@@ -595,7 +595,7 @@ const screen_components: Record<string, Function> = {
     }
 };
 
-const render = () => {
+const render = (ts: number) => {
     if (!draw_screen_img) return;
 
     draw_screen_img();
@@ -612,6 +612,8 @@ const render = () => {
     const tex = createTexture(gl, { src: monitor_screen_canvas });
     // render the opengl texture
     draw_image(tex, monitor_screen_canvas.width, monitor_screen_canvas.height, 0, 0, gl_canvas.width, gl_canvas.height);
+
+    requestAnimationFrame(render);
 };
 
 const screen_img = new Image();
@@ -619,7 +621,7 @@ screen_img.src = "assets/monitor.png";
 screen_img.onload = () => {
     // draw to the canvas and render all the buttons and stuff then pass it through the shaders and re-render
     draw_screen_img = () => monitor_ctx.drawImage(screen_img, 0, 0, screen_img.width, screen_img.height, 0, 0, monitor_screen_canvas.width, monitor_screen_canvas.height);
-    render();
+    render(0);
 };
 screen_img.onerror = console.error;
 
@@ -656,7 +658,6 @@ window.addEventListener("mousemove", evt => {
     const pos = get_canvas_rel_mouse_pos(evt, gl_canvas);
     if (pos.x > screen_left - 12 && pos.x < screen_right - 15 && pos.y > screen_top - 12 && pos.y < screen_bottom - 32) {
         screen_cursor_pos = [pos.x, pos.y];
-        render();
     }
     else
         screen_cursor_pos = [null, null];
@@ -670,7 +671,6 @@ window.addEventListener("mousedown", evt => {
         if (pos.x > kv[1].x0 - 12 && pos.x < kv[1].x1 - 12 && pos.y > kv[1].y0 - 12 && pos.y < kv[1].y1 - 16) {
             last_clicked = kv[0];
             kv[1].on_mousedown();
-            render();
         }
     });
 });
@@ -686,7 +686,6 @@ window.addEventListener("mouseup", evt => {
         if (last_clicked !== kv[0])
             kv[1].current_color = kv[1].start_color;
         kv[1].render();
-        render();
     });
     last_clicked = "";
 });
@@ -698,7 +697,6 @@ window.addEventListener("dblclick", evt => {
             if (kv[1].on_dblclick)
                 kv[1].on_dblclick();
         }
-        render();
     });
 });
 
@@ -707,7 +705,7 @@ setInterval(() => {
     const d = new Date();
     if (d.getMinutes() !== current_date.getMinutes()) {
         current_date = new Date();
-        render();
     }
 }, 1000);
 
+requestAnimationFrame(render);

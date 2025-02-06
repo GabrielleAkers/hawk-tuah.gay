@@ -397,7 +397,7 @@ const screen_components: Record<string, Function> = {
             },
             link_behavior: async () => {
                 game_info_showing = true;
-                game_server_info = await ((await fetch("https://games.hawk-tuah.gay:25555/status?game=starbound")).json());
+                game_server_info = await ((await fetch("https://games.hawk-tuah.gay:25555/status?game=wow")).json());
             }
         });
 

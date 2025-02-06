@@ -679,7 +679,7 @@ const screen_components: Record<string, Function> = {
             monitor_ctx.save();
             monitor_ctx.fillStyle = "white";
             monitor_ctx.font = "24pt Franklin Gothic";
-            monitor_ctx.fillText("GabbyWoW Signup 🗿", screen_width / 3 + 12, screen_height / 3 + screen_height * 0.035);
+            monitor_ctx.fillText("TuahWoW Signup 🗿", screen_width / 3 + 12, screen_height / 3 + screen_height * 0.035);
             monitor_ctx.restore();
 
             // close button

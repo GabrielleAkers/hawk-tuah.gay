@@ -49,7 +49,7 @@ void main() {
     }
     else
     {
-        gl_FragColor = texture2D(u_texture, distort(xy));
+        gl_FragColor = texture2D(u_texture, d);
     }
 }
 `;
@@ -160,12 +160,21 @@ icon_images["game_info_icon"] = new Image();
 icon_images["game_info_icon"].src = "assets/game_info_icon.png";
 icon_images["game_info_icon"].onerror = console.error;
 
+icon_images["wow_logo_icon"] = new Image();
+icon_images["wow_logo_icon"].src = "assets/wow_logo_icon.png";
+icon_images["wow_logo_icon"].onerror = console.error;
+
 let draw_screen_img: Function | null = null;
 let screen_cursor_pos: [number, number] | [null, null] = [null, null];
 let draw_screen_cursor: Function | null = null;
 
 let game_server_info: { info: { name: string, game: string, players: number, maxPlayers: number; }, players: { playerCount: number, players: { name: string; }[]; }; } | null = null;
 let game_info_showing = false;
+
+let create_wow_acc_showing = false;
+let focused_wow_acc_form_input: null | "user" | "pass" = null;
+const signup_form_state = { user: "", pass: "" };
+let signup_form_status = "";
 
 const screen_components: Record<string, Function> = {
     taskbar: () => {
@@ -392,6 +401,26 @@ const screen_components: Record<string, Function> = {
             }
         });
 
+        register_icon("wow_logo_icon", {
+            text: "WoW",
+            render_art: (x, y) => {
+                monitor_ctx.drawImage(icon_images["wow_logo_icon"], x, y, 2 * icon_size / 3, 2 * icon_size / 3);
+            },
+            render_text: (x, y) => {
+                monitor_ctx.save();
+                monitor_ctx.fillStyle = "white";
+                monitor_ctx.font = "20px Segoe UI";
+                monitor_ctx.shadowBlur = 1;
+                monitor_ctx.shadowOffsetY = 1;
+                monitor_ctx.shadowColor = "black";
+                monitor_ctx.fillText("Wow Signup", x - 5, y, icon_size);
+                monitor_ctx.restore();
+            },
+            link_behavior: async () => {
+                create_wow_acc_showing = true;
+            }
+        });
+
         let icons_col = 0;
         Object.entries(icons).forEach((kv, i) => {
             icons_col = Math.floor(i / max_icons_col);
@@ -592,6 +621,274 @@ const screen_components: Record<string, Function> = {
             monitor_ctx.restore();
         }
         monitor_ctx.restore();
+    },
+    create_wow_account_form_window: () => {
+        monitor_ctx.save();
+        if (create_wow_acc_showing) {
+            // top bar
+            monitor_ctx.save();
+            monitor_ctx.beginPath();
+            monitor_ctx.fillStyle = "#225AD9";
+            monitor_ctx.fillRect(screen_width / 3 + 2, screen_height / 3 + 2, screen_width / 3 - 2, screen_height * 0.05);
+            monitor_ctx.closePath();
+            monitor_ctx.restore();
+            // draw highlights
+            // upper white highlight
+            monitor_ctx.save();
+            monitor_ctx.beginPath();
+            monitor_ctx.moveTo(screen_width / 3 + 2, screen_height / 3 + 2);
+            monitor_ctx.lineTo(2 * screen_width / 3 - 2, screen_height / 3);
+            monitor_ctx.shadowBlur = 2;
+            monitor_ctx.shadowColor = "white";
+            monitor_ctx.shadowOffsetY = 2;
+            monitor_ctx.strokeStyle = "#225AD9";
+            monitor_ctx.stroke();
+            monitor_ctx.closePath();
+            // lower white highlight
+            monitor_ctx.save();
+            monitor_ctx.beginPath();
+            monitor_ctx.moveTo(screen_width / 3, screen_height / 3 + screen_height * 0.05 - 2);
+            monitor_ctx.lineTo(2 * screen_width / 3, screen_height / 3 + screen_height * 0.05 - 2);
+            monitor_ctx.shadowBlur = 4;
+            monitor_ctx.shadowColor = "white";
+            monitor_ctx.shadowOffsetY = 1;
+            monitor_ctx.strokeStyle = "#225AD9";
+            monitor_ctx.stroke();
+            monitor_ctx.closePath();
+            // lower dark highlight
+            monitor_ctx.beginPath();
+            monitor_ctx.moveTo(screen_width / 3, screen_height / 3 + screen_height * 0.05);
+            monitor_ctx.lineTo(2 * screen_width / 3, screen_height / 3 + screen_height * 0.05);
+            monitor_ctx.shadowBlur = 1;
+            monitor_ctx.shadowColor = "gray";
+            monitor_ctx.shadowOffsetY = -1;
+            monitor_ctx.strokeStyle = "#225AD9";
+            monitor_ctx.stroke();
+            monitor_ctx.restore();
+
+            // frame
+            monitor_ctx.save();
+            monitor_ctx.beginPath();
+            monitor_ctx.strokeStyle = "#225AD9";
+            monitor_ctx.roundRect(screen_width / 3, screen_height / 3, screen_width / 3, screen_height / 3, 10);
+            monitor_ctx.stroke();
+            monitor_ctx.closePath();
+            monitor_ctx.restore();
+
+            // frame label
+            monitor_ctx.save();
+            monitor_ctx.fillStyle = "white";
+            monitor_ctx.font = "24pt Franklin Gothic";
+            monitor_ctx.fillText("GabbyWoW Signup 🗿", screen_width / 3 + 12, screen_height / 3 + screen_height * 0.035);
+            monitor_ctx.restore();
+
+            // close button
+            register_clickable("close_create_window_btn", {
+                x0: 2 * screen_width / 3 - 42,
+                y0: screen_height / 3 + 6,
+                x1: 2 * screen_width / 3 - 6,
+                y1: screen_height / 3 + 42,
+                current_color: "#FF0000",
+                start_color: "#FF0000",
+                render: color => {
+                    const x = clickables["close_create_window_btn"].x0;
+                    const y = clickables["close_create_window_btn"].y0;
+                    const w = clickables["close_create_window_btn"].x1 - x;
+                    const h = clickables["close_create_window_btn"].y1 - y;
+                    monitor_ctx.save();
+                    monitor_ctx.beginPath();
+                    monitor_ctx.fillStyle = color || clickables["close_create_window_btn"].current_color;
+                    monitor_ctx.strokeStyle = "white";
+                    monitor_ctx.roundRect(x, y, w, h, 8);
+                    monitor_ctx.fill();
+                    monitor_ctx.stroke();
+                    monitor_ctx.closePath();
+                    monitor_ctx.beginPath();
+                    monitor_ctx.moveTo(x + 6, y + 6);
+                    monitor_ctx.lineTo(x + w - 6, y + h - 6);
+                    monitor_ctx.strokeStyle = "white";
+                    monitor_ctx.lineWidth = 4;
+                    monitor_ctx.stroke();
+                    monitor_ctx.closePath();
+                    monitor_ctx.beginPath();
+                    monitor_ctx.moveTo(x + w - 6, y + 6);
+                    monitor_ctx.lineTo(x + 6, y + h - 6);
+                    monitor_ctx.stroke();
+                    monitor_ctx.closePath();
+                    monitor_ctx.restore();
+                },
+                on_mousedown: () => {
+                    if (create_wow_acc_showing) {
+                        clickables["close_create_window_btn"].current_color = "#770000";
+                        clickables["close_create_window_btn"].render();
+                    }
+                },
+                on_mouseup: () => {
+                    if (create_wow_acc_showing) {
+                        create_wow_acc_showing = false;
+                        focused_wow_acc_form_input = null;
+                        signup_form_state.pass = "";
+                        signup_form_state.user = "";
+                        signup_form_status = "";
+                        clickables["close_create_window_btn"].current_color = clickables["close_create_window_btn"].start_color;
+                        clickables["close_create_window_btn"].render();
+                    }
+                }
+            });
+            clickables["close_create_window_btn"].render();
+
+            // text panel
+            monitor_ctx.save();
+            monitor_ctx.beginPath();
+            monitor_ctx.fillStyle = "white";
+            monitor_ctx.fillRect(screen_width / 3, screen_height / 3 + screen_height * 0.05, screen_width / 3, screen_height / 3);
+            monitor_ctx.closePath();
+            monitor_ctx.restore();
+
+            const txt_x = screen_width / 3 + 12;
+            const txt_y_base = screen_height / 3 + screen_height * 0.05 + 12;
+
+            monitor_ctx.fillStyle = "black";
+            monitor_ctx.font = "18pt Segoe UI";
+            monitor_ctx.fillText(`Username:`, txt_x, txt_y_base + 24);
+            register_clickable("create_wow_account_username_input", {
+                x0: txt_x,
+                y0: txt_y_base + 42,
+                x1: txt_x + screen_width / 3 - 24,
+                y1: txt_y_base + 74,
+                render: color => {
+                    const { x0, x1, y0, y1, start_color } = clickables["create_wow_account_username_input"];
+                    monitor_ctx.save();
+                    monitor_ctx.fillStyle = start_color;
+                    monitor_ctx.fillRect(x0, y0, x1 - x0, y1 - y0);
+                    monitor_ctx.strokeStyle = focused_wow_acc_form_input === "user" ? "#3BA83B" : "black";
+                    monitor_ctx.strokeRect(x0, y0, x1 - x0, y1 - y0);
+                    monitor_ctx.fillStyle = "black";
+                    monitor_ctx.font = "14pt Segoe UI";
+                    monitor_ctx.fillText(signup_form_state.user, x0 + 16, y0 + 24);
+                    monitor_ctx.restore();
+                },
+                start_color: "#F9F1F1",
+                current_color: "#F9F1F1",
+                on_mousedown: () => { },
+                on_mouseup: () => {
+                    if (create_wow_acc_showing) {
+                        clickables["create_wow_account_username_input"].render();
+                        focused_wow_acc_form_input = "user";
+                    }
+                }
+            });
+            clickables["create_wow_account_username_input"].render();
+
+            monitor_ctx.fillStyle = "black";
+            monitor_ctx.fillText(`Password:`, txt_x, txt_y_base + screen_height / 8 - 24, screen_width / 3 - 24);
+            register_clickable("create_wow_account_password_input", {
+                x0: txt_x,
+                y0: txt_y_base + screen_height / 8,
+                x1: txt_x + screen_width / 3 - 24,
+                y1: txt_y_base + screen_height / 8 + 32,
+                render: color => {
+                    const { x0, x1, y0, y1, start_color } = clickables["create_wow_account_password_input"];
+                    monitor_ctx.save();
+                    monitor_ctx.fillStyle = start_color;
+                    monitor_ctx.fillRect(x0, y0, x1 - x0, y1 - y0);
+                    monitor_ctx.strokeStyle = focused_wow_acc_form_input === "pass" ? "#3BA83B" : "black";
+                    monitor_ctx.strokeRect(x0, y0, x1 - x0, y1 - y0);
+                    monitor_ctx.fillStyle = "black";
+                    monitor_ctx.font = "14pt Segoe UI";
+                    monitor_ctx.fillText(signup_form_state.pass, x0 + 16, y0 + 24);
+                    monitor_ctx.restore();
+                },
+                current_color: "#F9F1F1",
+                start_color: "#F9F1F1",
+                on_mousedown: () => { },
+                on_mouseup: () => {
+                    if (create_wow_acc_showing) {
+                        clickables["create_wow_account_password_input"].render();
+                        focused_wow_acc_form_input = "pass";
+                    }
+                }
+            });
+            clickables["create_wow_account_password_input"].render();
+
+            register_clickable("create_wow_account_btn", {
+                x0: txt_x + 128,
+                y0: txt_y_base + screen_height / 6,
+                x1: txt_x + screen_width / 3 - 96,
+                y1: txt_y_base + screen_height / 6 + 32,
+                current_color: "#3BA83B",
+                start_color: "#3BA83B",
+                render: color => {
+                    const { x0, x1, y0, y1, current_color } = clickables["create_wow_account_btn"];
+                    monitor_ctx.save();
+                    monitor_ctx.fillStyle = color || current_color;
+                    monitor_ctx.fillRect(x0, y0, x1 - x0, 32);
+                    monitor_ctx.fillStyle = "white";
+                    monitor_ctx.shadowBlur = 0;
+                    monitor_ctx.font = "18pt Franklin Gothic";
+                    monitor_ctx.fillText("Create", (x1 + x0) / 2 - 20, y1 - 8);
+                    monitor_ctx.restore();
+                },
+                on_mousedown: () => {
+                    if (create_wow_acc_showing) {
+                        clickables["create_wow_account_btn"].current_color = "#266B26";
+                        clickables["create_wow_account_btn"].render();
+                    }
+                },
+                on_mouseup: async () => {
+                    if (create_wow_acc_showing) {
+                        clickables["create_wow_account_btn"].current_color = clickables["create_wow_account_btn"].start_color;
+                        const res = await fetch("https://games.hawk-tuah.gay:25555/create_wow_account", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(signup_form_state) });
+                        const res_data = await res.text();
+                        if (res_data === "USER_PASS_LEN_ERR") {
+                            signup_form_status = "User/pass can't be longer than 16 characters";
+                        }
+                        else if (res_data === "USER_SPEC_CHAR_ERR") {
+                            signup_form_status = "Special characters not allowed in username";
+                        }
+                        else if (res.status !== 200) {
+                            signup_form_status = res_data;
+                        } else {
+                            signup_form_status = "Account created!!!!!!! Poggers!\n Set realmlist.wtf to games.hawk-tuah.gay and have fun :)";
+                        }
+                        clickables["create_wow_account_btn"].render();
+                    }
+                }
+            });
+            clickables["create_wow_account_btn"].render();
+
+            // help text
+            monitor_ctx.fillStyle = "black";
+            monitor_ctx.beginPath();
+            monitor_ctx.moveTo(txt_x, 2 * screen_height / 3 - 64);
+            monitor_ctx.lineTo(2 * screen_width / 3 - 12, 2 * screen_height / 3 - 64);
+            monitor_ctx.strokeStyle = "gray";
+            monitor_ctx.stroke();
+            monitor_ctx.closePath();
+            monitor_ctx.font = "14pt Segoe UI";
+            const max_line_width = screen_width / 3 - 24;
+            monitor_ctx.fillStyle = "black";
+            monitor_ctx.font = "16pt Segoe UI";
+            let lines: string[][] = [];
+            let line_count = 0;
+            let tmp_txt = signup_form_status.split(" ");
+            lines[line_count] = [];
+            for (let t = 0; t < tmp_txt.length; t++) {
+                if (monitor_ctx.measureText(lines[line_count].join(" ")).width > max_line_width) {
+                    let last_item = lines[line_count].pop();
+                    line_count++;
+                    lines[line_count] = [last_item ?? ""];
+                }
+                lines[line_count].push(tmp_txt[t]);
+            }
+            let line_y = 2 * screen_height / 3 - 32;
+
+            lines.forEach(l => {
+                monitor_ctx.fillText(l.join(" "), txt_x, line_y, max_line_width);
+                line_y = line_y + 24;
+            });
+        }
+        monitor_ctx.restore();
     }
 };
 
@@ -698,6 +995,72 @@ window.addEventListener("dblclick", evt => {
                 kv[1].on_dblclick();
         }
     });
+});
+
+window.addEventListener("keyup", evt => {
+    if (create_wow_acc_showing) {
+        let editing_state;
+        if (focused_wow_acc_form_input === "user") {
+            editing_state = signup_form_state.user;
+            switch (evt.key) {
+                case "ArrowDown":
+                    break;
+                case "ArrowUp":
+                    break;
+                case "ArrowLeft":
+                    break;
+                case "ArrowRight":
+                    break;
+                case "Enter":
+                    break;
+                case " ":
+                    break;
+                case "Escape":
+                    break;
+                case "Shift":
+                    break;
+                case "Backspace":
+                    editing_state = editing_state.slice(0, editing_state.length - 1);
+                    break;
+                default:
+                    if (editing_state.length < 16 && /[aA-zZ0-9]{1}/.test(evt.key)) {
+                        editing_state = editing_state + evt.key;
+                    }
+                    break;
+            }
+            signup_form_state.user = editing_state;
+        }
+        if (focused_wow_acc_form_input === "pass") {
+            editing_state = signup_form_state.pass;
+            switch (evt.key) {
+                case "ArrowDown":
+                    break;
+                case "ArrowUp":
+                    break;
+                case "ArrowLeft":
+                    break;
+                case "ArrowRight":
+                    break;
+                case "Enter":
+                    break;
+                case " ":
+                    break;
+                case "Escape":
+                    break;
+                case "Shift":
+                    break;
+                case "Backspace":
+                    editing_state = editing_state.slice(0, editing_state.length - 1);
+                    break;
+                default:
+                    if (editing_state.length < 16) {
+                        editing_state = editing_state + evt.key;
+                    }
+                    break;
+            }
+            signup_form_state.pass = editing_state;
+        }
+    }
 });
 
 // update the date every second so it can be rendered into the juice

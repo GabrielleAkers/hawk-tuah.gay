@@ -1012,7 +1012,8 @@ window.addEventListener(has_mouse ? "mousedown" : "pointerdown", handle_mousedow
 
 window.addEventListener(has_mouse ? "mouseup" : "pointerup", evt => {
     handle_mouseup(evt);
-    setTimeout(() => handle_dblclick(evt), 50);
+    if (!has_mouse)
+        setTimeout(() => handle_dblclick(evt), 50);
 });
 
 if (has_mouse)

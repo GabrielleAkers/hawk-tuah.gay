@@ -132,6 +132,7 @@ type Clickable = {
     on_mouseup: Function,
     on_dblclick?: Function,
     render: (color?: string) => void,
+    is_showing: boolean;
 };
 const clickables: Record<string, Clickable> = {};
 const register_clickable = (name: string, obj: Clickable) => {
@@ -212,6 +213,7 @@ const screen_components: Record<string, Function> = {
         const start_btn_mousedown_color = "#266B26";
         const start_btn_mouseup_color = "#3BA83B";
         register_clickable("start_btn", {
+            is_showing: true,
             x0: screen_left,
             y0: screen_bottom - (screen_height * 0.05),
             x1: screen_left + screen_width * 0.125,
@@ -431,6 +433,7 @@ const screen_components: Record<string, Function> = {
                 screen_top + ((i % max_icons_col + 1) * icon_spacing + (i % max_icons_col) * icon_size) + icon_size
             ];
             register_clickable(kv[0], {
+                is_showing: true,
                 x0,
                 y0: y0 - 16,
                 x1,
@@ -520,6 +523,7 @@ const screen_components: Record<string, Function> = {
 
             // close button
             register_clickable("close_info_window_btn", {
+                is_showing: game_info_showing,
                 x0: 2 * screen_width / 3 - 42,
                 y0: screen_height / 3 + 6,
                 x1: 2 * screen_width / 3 - 6,
@@ -684,6 +688,7 @@ const screen_components: Record<string, Function> = {
 
             // close button
             register_clickable("close_create_window_btn", {
+                is_showing: create_wow_acc_showing,
                 x0: 2 * screen_width / 3 - 42,
                 y0: screen_height / 3 + 6,
                 x1: 2 * screen_width / 3 - 6,
@@ -752,6 +757,7 @@ const screen_components: Record<string, Function> = {
             monitor_ctx.font = "18pt Segoe UI";
             monitor_ctx.fillText(`Username:`, txt_x, txt_y_base + 24);
             register_clickable("create_wow_account_username_input", {
+                is_showing: create_wow_acc_showing,
                 x0: txt_x,
                 y0: txt_y_base + 42,
                 x1: txt_x + screen_width / 3 - 24,
@@ -783,6 +789,7 @@ const screen_components: Record<string, Function> = {
             monitor_ctx.fillStyle = "black";
             monitor_ctx.fillText(`Password:`, txt_x, txt_y_base + screen_height / 8 - 24, screen_width / 3 - 24);
             register_clickable("create_wow_account_password_input", {
+                is_showing: create_wow_acc_showing,
                 x0: txt_x,
                 y0: txt_y_base + screen_height / 8,
                 x1: txt_x + screen_width / 3 - 24,
@@ -812,6 +819,7 @@ const screen_components: Record<string, Function> = {
             clickables["create_wow_account_password_input"].render();
 
             register_clickable("create_wow_account_btn", {
+                is_showing: create_wow_acc_showing,
                 x0: txt_x + 128,
                 y0: txt_y_base + screen_height / 6,
                 x1: txt_x + screen_width / 3 - 96,
@@ -962,22 +970,25 @@ window.addEventListener("mousemove", evt => {
 
 let last_clicked = "";
 
-window.addEventListener("mousedown", evt => {
+const has_mouse = matchMedia("(pointer:fine)").matches;
+
+const handle_mousedown = (evt: MouseEvent | PointerEvent) => {
     const pos = get_canvas_rel_mouse_pos(evt, gl_canvas);
     Object.entries(clickables).forEach(kv => {
-        if (pos.x > kv[1].x0 - 12 && pos.x < kv[1].x1 - 12 && pos.y > kv[1].y0 - 12 && pos.y < kv[1].y1 - 16) {
+        if (pos.x > kv[1].x0 - 12 && pos.x < kv[1].x1 - 12 && pos.y > kv[1].y0 - 12 && pos.y < kv[1].y1 - 16 && kv[1].is_showing) {
             last_clicked = kv[0];
             kv[1].on_mousedown();
         }
     });
-});
+};
 
-window.addEventListener("mouseup", evt => {
+const handle_mouseup = (evt: MouseEvent | PointerEvent) => {
     const pos = get_canvas_rel_mouse_pos(evt, gl_canvas);
     Object.entries(clickables).forEach(kv => {
-        if (pos.x > kv[1].x0 - 12 && pos.x < kv[1].x1 - 12 && pos.y > kv[1].y0 - 12 && pos.y < kv[1].y1 - 16) {
+        if (pos.x > kv[1].x0 - 12 && pos.x < kv[1].x1 - 12 && pos.y > kv[1].y0 - 12 && pos.y < kv[1].y1 - 16 && kv[1].is_showing) {
             if (last_clicked === kv[0]) {
                 kv[1].on_mouseup();
+
             }
         }
         if (last_clicked !== kv[0])
@@ -985,17 +996,27 @@ window.addEventListener("mouseup", evt => {
         kv[1].render();
     });
     last_clicked = "";
-});
+};
 
-window.addEventListener("dblclick", evt => {
+const handle_dblclick = (evt: MouseEvent | PointerEvent) => {
     const pos = get_canvas_rel_mouse_pos(evt, gl_canvas);
     Object.entries(clickables).forEach(kv => {
-        if (pos.x > kv[1].x0 && pos.x < kv[1].x1 && pos.y > kv[1].y0 && pos.y < kv[1].y1) {
+        if (pos.x > kv[1].x0 && pos.x < kv[1].x1 && pos.y > kv[1].y0 && pos.y < kv[1].y1 && kv[1].is_showing) {
             if (kv[1].on_dblclick)
                 kv[1].on_dblclick();
         }
     });
+};
+
+window.addEventListener(has_mouse ? "mousedown" : "pointerdown", handle_mousedown);
+
+window.addEventListener(has_mouse ? "mouseup" : "pointerup", evt => {
+    handle_mouseup(evt);
+    setTimeout(() => handle_dblclick(evt), 50);
 });
+
+if (has_mouse)
+    window.addEventListener("dblclick", handle_dblclick);
 
 window.addEventListener("keyup", evt => {
     if (create_wow_acc_showing) {

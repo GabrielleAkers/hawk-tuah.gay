@@ -35,10 +35,10 @@ if ("${PLATFORM}" STREQUAL "Web")
         COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/assets $<TARGET_FILE_DIR:${PROJECT_NAME}>/assets
     )
 
-    target_compile_definitions(${PROJECT_NAME} PUBLIC ASSETS_PATH="$<TARGET_FILE_DIR:${PROJECT_NAME}>/assets/")
+    target_compile_definitions(${PROJECT_NAME} PUBLIC ASSETS_PATH="./assets/")
 
     set_target_properties(${PROJECT_NAME} PROPERTIES SUFFIX ".html")
-    target_link_options(${PROJECT_NAME} PUBLIC -sUSE_GLFW=3 -sWASM=1 -sASSERTIONS=1 PUBLIC --preload-file $<TARGET_FILE_DIR:${PROJECT_NAME}>/assets --emrun --shell-file ${CMAKE_SOURCE_DIR}/src/shell.html)
+    target_link_options(${PROJECT_NAME} PUBLIC -sUSE_GLFW=3 -sWASM=1 -sASSERTIONS=1 PUBLIC --preload-file ../assets --emrun --shell-file ${CMAKE_SOURCE_DIR}/src/shell.html)
 else()
     add_custom_command(
         TARGET ${PROJECT_NAME} POST_BUILD

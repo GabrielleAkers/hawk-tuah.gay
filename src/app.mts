@@ -165,6 +165,10 @@ icon_images["wow_logo_icon"] = new Image();
 icon_images["wow_logo_icon"].src = "assets/wow_logo_icon.png";
 icon_images["wow_logo_icon"].onerror = console.error;
 
+icon_images["library_icon"] = new Image();
+icon_images["library_icon"].src = "assets/library_icon.png";
+icon_images["library_icon"].onerror = console.error;
+
 let draw_screen_img: Function | null = null;
 let screen_cursor_pos: [number, number] | [null, null] = [null, null];
 let draw_screen_cursor: Function | null = null;
@@ -420,6 +424,26 @@ const screen_components: Record<string, Function> = {
             },
             link_behavior: async () => {
                 create_wow_acc_showing = true;
+            }
+        });
+
+        register_icon("library_icon", {
+            text: "Read!",
+            render_art: (x, y) => {
+                monitor_ctx.drawImage(icon_images["library_icon"], x, y, 2 * icon_size / 3, 2 * icon_size / 3);
+            },
+            render_text: (x, y) => {
+                monitor_ctx.save();
+                monitor_ctx.fillStyle = "white";
+                monitor_ctx.font = "20px Segoe UI";
+                monitor_ctx.shadowBlur = 1;
+                monitor_ctx.shadowOffsetY = 1;
+                monitor_ctx.shadowColor = "black";
+                monitor_ctx.fillText("Read books!", x - 5, y, icon_size);
+                monitor_ctx.restore();
+            },
+            link_behavior: () => {
+                location.href = "https://books.hawk-tuah.gay/";
             }
         });
 

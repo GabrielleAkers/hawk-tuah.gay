@@ -34,6 +34,7 @@ jobs:
           mv ./assets ./_site
           mv ./index.html ./_site
           mv ./built ./_site
+          mv ./gaycyberspace ./_site
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
   deploy:

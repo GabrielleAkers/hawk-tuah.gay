@@ -1,5 +1,42 @@
-#include "raylib.h"
-#include "rcamera.h"
+// Jolt Physics Library (https://github.com/jrouwe/JoltPhysics)
+// SPDX-FileCopyrightText: 2025 Jorrit Rouwe
+// SPDX-License-Identifier: CC0-1.0
+// This file is in the public domain. It serves as an example to start building
+// your own application using Jolt Physics. Feel free to copy paste without
+// attribution!
+
+// The Jolt headers don't include Jolt.h. Always include Jolt.h before including
+// any other Jolt header. You can use Jolt.h in your precompiled header to speed
+// up compilation.
+#include "Color.hpp"
+#include "Vector3.hpp"
+#include <Jolt/Jolt.h>
+
+// Jolt includes
+#include <Jolt/Core/Factory.h>
+#include <Jolt/Core/JobSystemThreadPool.h>
+#include <Jolt/Core/TempAllocator.h>
+#include <Jolt/Physics/Body/BodyActivationListener.h>
+#include <Jolt/Physics/Body/BodyCreationSettings.h>
+#include <Jolt/Physics/Collision/Shape/BoxShape.h>
+#include <Jolt/Physics/Collision/Shape/SphereShape.h>
+#include <Jolt/Physics/PhysicsSettings.h>
+#include <Jolt/Physics/PhysicsSystem.h>
+#include <Jolt/RegisterTypes.h>
+
+// STL includes
+#include <cstdarg>
+#include <emscripten/em_macros.h>
+#include <iostream>
+#include <raylib.h>
+#include <stdio.h>
+#include <thread>
+
+#include "Jolt/Physics/Body/BodyInterface.h"
+#include "Jolt/Physics/Body/BodyManager.h"
+#include "Jolt/Physics/Collision/Shape/Shape.h"
+
+#include "raylib-cpp.hpp"
 #include "rlgl.h"
 
 #if defined(PLATFORM_WEB)
@@ -17,21 +54,379 @@ extern void setWindowSize(const int width, const int height) {
 }
 }
 
-Camera camera;
-Texture2D tex_snile;
+raylib::Window window;
+raylib::Camera camera;
 
+class PhysicsHolder;
 void UpdateDrawFrame(void);
-Camera InitCamera(void);
-void DrawCubeTexture(Texture2D texture, Vector3 position, float width, float height, float length, Color color);
+raylib::Camera InitCamera(void);
 
-int main() {
-    InitWindow(screenWidth, screenHeight, "Hawk Tuah! 🏳️‍⚧️");
+raylib::Camera InitCamera(void) {
+    raylib::Camera camera = (raylib::Vector3){0, 0, 0};
+    camera.position = (raylib::Vector3){0.0f, 2.0f, 10.0f};
+    camera.target = (raylib::Vector3){1.0f, 2.0f, 0.0f};
+    camera.up = (raylib::Vector3){0.0f, 1.0f, 0.0f};
+    camera.fovy = 60.0f;
+    camera.projection = CAMERA_PERSPECTIVE;
+    return camera;
+}
 
-    tex_snile = LoadTexture(ASSETS_PATH"snile.png");
+// Disable common warnings triggered by Jolt, you can use
+// JPH_SUPPRESS_WARNING_PUSH / JPH_SUPPRESS_WARNING_POP to store and restore the
+// warning state
+JPH_SUPPRESS_WARNINGS
+
+// All Jolt symbols are in the JPH namespace
+using namespace JPH;
+
+// If you want your code to compile using single or double precision write 0.0_r
+// to get a Real value that compiles to double or float depending if
+// JPH_DOUBLE_PRECISION is set or not.
+using namespace JPH::literals;
+
+// We're also using STL classes in this example
+using namespace std;
+
+// Callback for traces, connect this to your own trace function if you have one
+static void TraceImpl(const char* inFMT, ...) {
+    // Format the message
+    va_list list;
+    va_start(list, inFMT);
+    char buffer[1024];
+    vsnprintf(buffer, sizeof(buffer), inFMT, list);
+    va_end(list);
+
+    // Print to the TTY
+    cout << buffer << endl;
+}
+
+#ifdef JPH_ENABLE_ASSERTS
+
+// Callback for asserts, connect this to your own assert handler if you have one
+static bool AssertFailedImpl(const char* inExpression, const char* inMessage,
+                             const char* inFile, uint inLine) {
+    // Print to the TTY
+    cout << inFile << ":" << inLine << ": (" << inExpression << ") "
+         << (inMessage != nullptr ? inMessage : "") << endl;
+
+    // Breakpoint
+    return true;
+};
+
+#endif // JPH_ENABLE_ASSERTS
+
+// Layer that objects can be in, determines which other objects it can collide
+// with Typically you at least want to have 1 layer for moving bodies and 1
+// layer for static bodies, but you can have more layers if you want. E.g. you
+// could have a layer for high detail collision (which is not used by the
+// physics simulation but only if you do collision testing).
+namespace Layers {
+static constexpr ObjectLayer NON_MOVING = 0;
+static constexpr ObjectLayer MOVING = 1;
+static constexpr ObjectLayer NUM_LAYERS = 2;
+}; // namespace Layers
+
+/// Class that determines if two object layers can collide
+class ObjectLayerPairFilterImpl : public ObjectLayerPairFilter {
+  public:
+    virtual bool ShouldCollide(ObjectLayer inObject1,
+                               ObjectLayer inObject2) const override {
+        switch (inObject1) {
+        case Layers::NON_MOVING:
+            return inObject2 ==
+                   Layers::MOVING; // Non moving only collides with moving
+        case Layers::MOVING:
+            return true; // Moving collides with everything
+        default:
+            JPH_ASSERT(false);
+            return false;
+        }
+    }
+};
+
+// Each broadphase layer results in a separate bounding volume tree in the broad
+// phase. You at least want to have a layer for non-moving and moving objects to
+// avoid having to update a tree full of static objects every frame. You can
+// have a 1-on-1 mapping between object layers and broadphase layers (like in
+// this case) but if you have many object layers you'll be creating many broad
+// phase trees, which is not efficient. If you want to fine tune your broadphase
+// layers define JPH_TRACK_BROADPHASE_STATS and look at the stats reported on
+// the TTY.
+namespace BroadPhaseLayers {
+static constexpr BroadPhaseLayer NON_MOVING(0);
+static constexpr BroadPhaseLayer MOVING(1);
+static constexpr uint NUM_LAYERS(2);
+}; // namespace BroadPhaseLayers
+
+// BroadPhaseLayerInterface implementation
+// This defines a mapping between object and broadphase layers.
+class BPLayerInterfaceImpl final : public BroadPhaseLayerInterface {
+  public:
+    BPLayerInterfaceImpl() {
+        // Create a mapping table from object to broad phase layer
+        mObjectToBroadPhase[Layers::NON_MOVING] = BroadPhaseLayers::NON_MOVING;
+        mObjectToBroadPhase[Layers::MOVING] = BroadPhaseLayers::MOVING;
+    }
+
+    virtual uint GetNumBroadPhaseLayers() const override {
+        return BroadPhaseLayers::NUM_LAYERS;
+    }
+
+    virtual BroadPhaseLayer
+    GetBroadPhaseLayer(ObjectLayer inLayer) const override {
+        JPH_ASSERT(inLayer < Layers::NUM_LAYERS);
+        return mObjectToBroadPhase[inLayer];
+    }
+
+#if defined(JPH_EXTERNAL_PROFILE) || defined(JPH_PROFILE_ENABLED)
+    virtual const char*
+    GetBroadPhaseLayerName(BroadPhaseLayer inLayer) const override {
+        switch ((BroadPhaseLayer::Type)inLayer) {
+        case (BroadPhaseLayer::Type)BroadPhaseLayers::NON_MOVING:
+            return "NON_MOVING";
+        case (BroadPhaseLayer::Type)BroadPhaseLayers::MOVING:
+            return "MOVING";
+        default:
+            JPH_ASSERT(false);
+            return "INVALID";
+        }
+    }
+#endif // JPH_EXTERNAL_PROFILE || JPH_PROFILE_ENABLED
+
+  private:
+    BroadPhaseLayer mObjectToBroadPhase[Layers::NUM_LAYERS];
+};
+
+/// Class that determines if an object layer can collide with a broadphase layer
+class ObjectVsBroadPhaseLayerFilterImpl : public ObjectVsBroadPhaseLayerFilter {
+  public:
+    virtual bool ShouldCollide(ObjectLayer inLayer1,
+                               BroadPhaseLayer inLayer2) const override {
+        switch (inLayer1) {
+        case Layers::NON_MOVING:
+            return inLayer2 == BroadPhaseLayers::MOVING;
+        case Layers::MOVING:
+            return true;
+        default:
+            JPH_ASSERT(false);
+            return false;
+        }
+    }
+};
+
+// An example contact listener
+class MyContactListener : public ContactListener {
+  public:
+    // See: ContactListener
+    virtual ValidateResult
+    OnContactValidate(const Body& inBody1, const Body& inBody2,
+                      RVec3Arg inBaseOffset,
+                      const CollideShapeResult& inCollisionResult) override {
+
+        // Allows you to ignore a contact before it is created (using layers to
+        // not make objects collide is cheaper!)
+        return ValidateResult::AcceptAllContactsForThisBodyPair;
+    }
+
+    virtual void OnContactAdded(const Body& inBody1, const Body& inBody2,
+                                const ContactManifold& inManifold,
+                                ContactSettings& ioSettings) override {}
+
+    virtual void OnContactPersisted(const Body& inBody1, const Body& inBody2,
+                                    const ContactManifold& inManifold,
+                                    ContactSettings& ioSettings) override {}
+
+    virtual void
+    OnContactRemoved(const SubShapeIDPair& inSubShapePair) override {}
+};
+
+// An example activation listener
+class MyBodyActivationListener : public BodyActivationListener {
+  public:
+    virtual void OnBodyActivated(const BodyID& inBodyID,
+                                 uint64 inBodyUserData) override {
+        cout << "A body got activated" << endl;
+    }
+
+    virtual void OnBodyDeactivated(const BodyID& inBodyID,
+                                   uint64 inBodyUserData) override {
+        cout << "A body went to sleep" << endl;
+    }
+};
+
+// We simulate the physics world in discrete time steps. 60 Hz is a good
+// rate to update the physics system.
+const float cDeltaTime = 1.0f / 60.0f;
+
+uint step = 0;
+JobSystemThreadPool job_system;
+TempAllocatorImpl* temp_allocator;
+PhysicsSystem physics_system;
+
+// Now we can create the actual physics system.
+BodyID sphere_id;
+const float sphere_radius = 0.5f;
+
+// Program entry point
+int main(int argc, char** argv) {
+    // Register allocation hook. In this example we'll just let Jolt use
+    // malloc
+    // / free but you can override these if you want (see Memory.h). This
+    // needs to be done before any other Jolt function is called.
+    RegisterDefaultAllocator();
+
+    // Install trace and assert callbacks
+    Trace = TraceImpl;
+    JPH_IF_ENABLE_ASSERTS(AssertFailed = AssertFailedImpl;)
+
+    // Create a factory, this class is responsible for creating instances of
+    // classes based on their name or hash and is mainly used for
+    // deserialization of saved data. It is not directly used in this
+    // example but still required.
+    Factory::sInstance = new Factory();
+
+    // Register all physics types with the factory and install their
+    // collision handlers with the CollisionDispatch class. If you have your
+    // own custom shape types you probably need to register their handlers
+    // with the CollisionDispatch before calling this function. If you
+    // implement your own default material (PhysicsMaterial::sDefault) make
+    // sure to initialize it before this function or else this function will
+    // create one for you.
+    RegisterTypes();
+
+    temp_allocator = new TempAllocatorImpl(10 * 1024 * 1024);
+    job_system.Init(cMaxPhysicsJobs, cMaxPhysicsBarriers,
+                    thread::hardware_concurrency() - 1);
+
+    // We need a job system that will execute physics jobs on multiple
+    // threads. Typically you would implement the JobSystem interface
+    // yourself and let Jolt Physics run on top of your own job scheduler.
+    // JobSystemThreadPool is an example implementation.
+
+    // This is the max amount of rigid bodies that you can add to the
+    // physics system. If you try to add more you'll get an error. Note:
+    // This value is low because this is a simple test. For a real project
+    // use something in the order of 65536.
+    const uint cMaxBodies = 1024;
+
+    // This determines how many mutexes to allocate to protect rigid bodies
+    // from concurrent access. Set it to 0 for the default settings.
+    const uint cNumBodyMutexes = 0;
+
+    // This is the max amount of body pairs that can be queued at any time
+    // (the broad phase will detect overlapping body pairs based on their
+    // bounding boxes and will insert them into a queue for the
+    // narrowphase). If you make this buffer too small the queue will fill
+    // up and the broad phase jobs will start to do narrow phase work. This
+    // is slightly less efficient. Note: This value is low because this is a
+    // simple test. For a real project use something in the order of 65536.
+    const uint cMaxBodyPairs = 1024;
+
+    // This is the maximum size of the contact constraint buffer. If more
+    // contacts (collisions between bodies) are detected than this number
+    // then these contacts will be ignored and bodies will start
+    // interpenetrating / fall through the world. Note: This value is low
+    // because this is a simple test. For a real project use something in
+    // the order of 10240.
+    const uint cMaxContactConstraints = 1024;
+
+    // Create mapping table from object layer to broadphase layer
+    // Note: As this is an interface, PhysicsSystem will take a reference to
+    // this so this instance needs to stay alive! Also have a look at
+    // BroadPhaseLayerInterfaceTable or BroadPhaseLayerInterfaceMask for a
+    // simpler interface.
+    BPLayerInterfaceImpl broad_phase_layer_interface;
+
+    // Create class that filters object vs broadphase layers
+    // Note: As this is an interface, PhysicsSystem will take a reference to
+    // this so this instance needs to stay alive! Also have a look at
+    // ObjectVsBroadPhaseLayerFilterTable or
+    // ObjectVsBroadPhaseLayerFilterMask for a simpler interface.
+    ObjectVsBroadPhaseLayerFilterImpl object_vs_broadphase_layer_filter;
+
+    // Create class that filters object vs object layers
+    // Note: As this is an interface, PhysicsSystem will take a reference to
+    // this so this instance needs to stay alive! Also have a look at
+    // ObjectLayerPairFilterTable or ObjectLayerPairFilterMask for a simpler
+    // interface.
+    ObjectLayerPairFilterImpl object_vs_object_layer_filter;
+
+    physics_system.Init(cMaxBodies, cNumBodyMutexes, cMaxBodyPairs,
+                        cMaxContactConstraints, broad_phase_layer_interface,
+                        object_vs_broadphase_layer_filter,
+                        object_vs_object_layer_filter);
+
+    // A body activation listener gets notified when bodies activate and go
+    // to sleep Note that this is called from a job so whatever you do here
+    // needs to be thread safe. Registering one is entirely optional.
+    MyBodyActivationListener body_activation_listener;
+    physics_system.SetBodyActivationListener(&body_activation_listener);
+
+    // A contact listener gets notified when bodies (are about to) collide,
+    // and when they separate again. Note that this is called from a job so
+    // whatever you do here needs to be thread safe. Registering one is
+    // entirely optional.
+    MyContactListener contact_listener;
+    physics_system.SetContactListener(&contact_listener);
+    // Next we can create a rigid body to serve as the floor, we make a large
+    // box Create the settings for the collision volume (the shape). Note that
+    // for simple shapes (like boxes) you can also directly construct a
+    // BoxShape.
+    BoxShapeSettings floor_shape_settings(Vec3(100.0f, 1.0f, 100.0f));
+    floor_shape_settings
+        .SetEmbedded(); // A ref counted object on the stack (base class
+                        // RefTarget) should be marked as such to prevent it
+                        // from being freed when its reference count goes to 0.
+
+    // Create the shape
+    ShapeSettings::ShapeResult floor_shape_result =
+        floor_shape_settings.Create();
+    ShapeRefC floor_shape =
+        floor_shape_result
+            .Get(); // We don't expect an error here, but you can check
+                    // floor_shape_result for HasError() / GetError()
+
+    // Create the settings for the body itself. Note that here you can also set
+    // other properties like the restitution / friction.
+    BodyCreationSettings floor_settings(
+        floor_shape, RVec3(0.0_r, -1.0_r, 0.0_r), Quat::sIdentity(),
+        EMotionType::Static, Layers::NON_MOVING);
+
+    BodyInterface& body_interface = physics_system.GetBodyInterface();
+    // Create the actual rigid body
+    Body* floor = body_interface.CreateBody(
+        floor_settings); // Note that if we run out of bodies this can return
+                         // nullptr
+    
+    // Add it to the world
+    body_interface.AddBody(floor->GetID(), EActivation::DontActivate);
+
+    // Now create a dynamic body to bounce on the floor
+    // Note that this uses the shorthand version of creating and adding a body
+    // to the world
+    BodyCreationSettings sphere_settings(
+        new SphereShape(sphere_radius), RVec3(0.0_r, 20.0_r, 0.0_r), Quat::sIdentity(),
+        EMotionType::Dynamic, Layers::MOVING);
+    sphere_id =
+        body_interface.CreateAndAddBody(sphere_settings, EActivation::Activate);
+
+    // Now you can interact with the dynamic body, in this case we're going to
+    // give it a velocity. (note that if we had used CreateBody then we could
+    // have set the velocity straight on the body before adding it to the
+    // physics system)
+    body_interface.SetLinearVelocity(sphere_id, Vec3(0.0f, -5.0f, 0.0f));
+
+    // Optional step: Before starting the physics simulation you can optimize
+    // the broad phase. This improves collision detection performance (it's
+    // pointless here because we only have 2 bodies). You should definitely not
+    // call this every frame or when e.g. streaming in a new level section as it
+    // is an expensive operation. Instead insert all new objects in batches
+    // instead of 1 at a time to keep the broad phase efficient.
+    physics_system.OptimizeBroadPhase();
+
+    window.Init(screenWidth, screenHeight,
+                            "Hawk Tuah! 🏳️‍⚧️");
     camera = InitCamera();
-
-    rlDisableBackfaceCulling();
-
 #if defined(PLATFORM_WEB)
     emscripten_set_main_loop(UpdateDrawFrame, 0, 1);
 #else
@@ -42,93 +437,60 @@ int main() {
     }
 #endif
 
-    CloseWindow();
+    printf("here----------------------------------------------------------------------------------------------------------------------------------------\n");
+    window.Close();
+
+    // Remove the sphere from the physics system. Note that the sphere itself
+    // keeps all of its state and can be re-added at any time.
+    body_interface.RemoveBody(sphere_id);
+
+    // Destroy the sphere. After this the sphere ID is no longer valid.
+    body_interface.DestroyBody(sphere_id);
+
+    // Remove and destroy the floor
+    body_interface.RemoveBody(floor->GetID());
+    body_interface.DestroyBody(floor->GetID());
+
+    // Unregisters all types with the factory and cleans up the default material
+    UnregisterTypes();
+
+    // Destroy the factory
+    delete Factory::sInstance;
+    Factory::sInstance = nullptr;
+
     return 0;
 }
 
-Camera InitCamera(void) {
-    Camera camera = {0};
-    camera.position = (Vector3){0.0f, 2.0f, 0.0f};
-    camera.target = (Vector3){1.0f, 2.0f, 0.0f};
-    camera.up = (Vector3){0.0f, 1.0f, 0.0f};
-    camera.fovy = 60.0f;
-    camera.projection = CAMERA_PERSPECTIVE;
-    return camera;
-}
-
 void UpdateDrawFrame(void) {
-    UpdateCamera(&camera, CAMERA_FIRST_PERSON);
+    // Next step
+    ++step;
 
-    BeginDrawing();
+    BodyInterface& body_interface = physics_system.GetBodyInterface();
+    RVec3 sphere_position = body_interface.GetCenterOfMassPosition(sphere_id);
+    // Output current position and velocity of the sphere
+    // If you take larger steps than 1 / 60th of a second you need to do
+    // multiple collision steps in order to keep the simulation stable. Do 1
+    // collision step per 1 / 60th of a second (round up).
+    const int cCollisionSteps = 1;
 
-    ClearBackground(RAYWHITE);
+    // Step the world
+    physics_system.Update(cDeltaTime, cCollisionSteps, temp_allocator,
+                            &job_system);
+    
 
-    BeginMode3D(camera);
+    camera.Update(CAMERA_FIRST_PERSON);
 
-    DrawCubeTexture(tex_snile, (Vector3){0.0f, 0.0f, 0.0f}, 50.0f, 50.0f, 50.0f, WHITE);
+    window.BeginDrawing();
 
-    EndMode3D();
+    window.ClearBackground(raylib::Color::RayWhite());
 
-    EndDrawing();
-}
+    camera.BeginMode();
 
-void DrawCubeTexture(Texture2D texture, Vector3 position, float width, float height, float length, Color color)
-{
-    float x = position.x;
-    float y = position.y;
-    float z = position.z;
+    DrawCube(raylib::Vector3(0, -1, 0), 100.0f, 1.0f, 100.f, raylib::Color::Red());
 
-    // Set desired texture to be enabled while drawing following vertex data
-    rlSetTexture(texture.id);
+    DrawSphere(raylib::Vector3(sphere_position.GetX(), sphere_position.GetY(), sphere_position.GetZ()), sphere_radius, raylib::Color::Yellow());
 
-    // Vertex data transformation can be defined with the commented lines,
-    // but in this example we calculate the transformed vertex data directly when calling rlVertex3f()
-    //rlPushMatrix();
-        // NOTE: Transformation is applied in inverse order (scale -> rotate -> translate)
-        //rlTranslatef(2.0f, 0.0f, 0.0f);
-        //rlRotatef(45, 0, 1, 0);
-        //rlScalef(2.0f, 2.0f, 2.0f);
+    camera.EndMode();
 
-        rlBegin(RL_QUADS);
-            rlColor4ub(color.r, color.g, color.b, color.a);
-            // Front Face
-            rlNormal3f(0.0f, 0.0f, 1.0f);       // Normal Pointing Towards Viewer
-            rlTexCoord2f(0.0f, 1.0f); rlVertex3f(x - width/2, y - height/2, z + length/2);  // Bottom Left Of The Texture and Quad
-            rlTexCoord2f(1.0f, 1.0f); rlVertex3f(x + width/2, y - height/2, z + length/2);  // Bottom Right Of The Texture and Quad
-            rlTexCoord2f(1.0f, 0.0f); rlVertex3f(x + width/2, y + height/2, z + length/2);  // Top Right Of The Texture and Quad
-            rlTexCoord2f(0.0f, 0.0f); rlVertex3f(x - width/2, y + height/2, z + length/2);  // Top Left Of The Texture and Quad
-            // Back Face
-            rlNormal3f(0.0f, 0.0f, - 1.0f);     // Normal Pointing Away From Viewer
-            rlTexCoord2f(1.0f, 1.0f); rlVertex3f(x - width/2, y - height/2, z - length/2);  // Bottom Right Of The Texture and Quad
-            rlTexCoord2f(1.0f, 0.0f); rlVertex3f(x - width/2, y + height/2, z - length/2);  // Top Right Of The Texture and Quad
-            rlTexCoord2f(0.0f, 0.0f); rlVertex3f(x + width/2, y + height/2, z - length/2);  // Top Left Of The Texture and Quad
-            rlTexCoord2f(0.0f, 1.0f); rlVertex3f(x + width/2, y - height/2, z - length/2);  // Bottom Left Of The Texture and Quad
-            // Top Face
-            rlNormal3f(0.0f, 1.0f, 0.0f);       // Normal Pointing Up
-            rlTexCoord2f(0.0f, 0.0f); rlVertex3f(x - width/2, y + height/2, z - length/2);  // Top Left Of The Texture and Quad
-            rlTexCoord2f(0.0f, 1.0f); rlVertex3f(x - width/2, y + height/2, z + length/2);  // Bottom Left Of The Texture and Quad
-            rlTexCoord2f(1.0f, 1.0f); rlVertex3f(x + width/2, y + height/2, z + length/2);  // Bottom Right Of The Texture and Quad
-            rlTexCoord2f(1.0f, 0.0f); rlVertex3f(x + width/2, y + height/2, z - length/2);  // Top Right Of The Texture and Quad
-            // Bottom Face
-            rlNormal3f(0.0f, - 1.0f, 0.0f);     // Normal Pointing Down
-            rlTexCoord2f(1.0f, 0.0f); rlVertex3f(x - width/2, y - height/2, z - length/2);  // Top Right Of The Texture and Quad
-            rlTexCoord2f(0.0f, 0.0f); rlVertex3f(x + width/2, y - height/2, z - length/2);  // Top Left Of The Texture and Quad
-            rlTexCoord2f(0.0f, 1.0f); rlVertex3f(x + width/2, y - height/2, z + length/2);  // Bottom Left Of The Texture and Quad
-            rlTexCoord2f(1.0f, 1.0f); rlVertex3f(x - width/2, y - height/2, z + length/2);  // Bottom Right Of The Texture and Quad
-            // Right face
-            rlNormal3f(1.0f, 0.0f, 0.0f);       // Normal Pointing Right
-            rlTexCoord2f(1.0f, 1.0f); rlVertex3f(x + width/2, y - height/2, z - length/2);  // Bottom Right Of The Texture and Quad
-            rlTexCoord2f(1.0f, 0.0f); rlVertex3f(x + width/2, y + height/2, z - length/2);  // Top Right Of The Texture and Quad
-            rlTexCoord2f(0.0f, 0.0f); rlVertex3f(x + width/2, y + height/2, z + length/2);  // Top Left Of The Texture and Quad
-            rlTexCoord2f(0.0f, 1.0f); rlVertex3f(x + width/2, y - height/2, z + length/2);  // Bottom Left Of The Texture and Quad
-            // Left Face
-            rlNormal3f( - 1.0f, 0.0f, 0.0f);    // Normal Pointing Left
-            rlTexCoord2f(0.0f, 1.0f); rlVertex3f(x - width/2, y - height/2, z - length/2);  // Bottom Left Of The Texture and Quad
-            rlTexCoord2f(1.0f, 1.0f); rlVertex3f(x - width/2, y - height/2, z + length/2);  // Bottom Right Of The Texture and Quad
-            rlTexCoord2f(1.0f, 0.0f); rlVertex3f(x - width/2, y + height/2, z + length/2);  // Top Right Of The Texture and Quad
-            rlTexCoord2f(0.0f, 0.0f); rlVertex3f(x - width/2, y + height/2, z - length/2);  // Top Left Of The Texture and Quad
-        rlEnd();
-    //rlPopMatrix();
-
-    rlSetTexture(0);
+    window.EndDrawing();
 }

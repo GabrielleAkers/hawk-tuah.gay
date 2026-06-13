@@ -5,3 +5,7 @@ Language: Cpp
 # Force pointers to the type for C++.
 DerivePointerAlignment: false
 PointerAlignment: Left
+IncludeBlocks: Preserve
+SortIncludes: {
+  Enabled: false
+}

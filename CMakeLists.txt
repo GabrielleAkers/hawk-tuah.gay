@@ -127,6 +127,12 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g")
 
 # raylib section
 # --------------------------------------------------------------------------------------
+if(NOT "${PLATFORM}" STREQUAL "Web")
+    set(GLFW_BUILD_WAYLAND ON CACHE BOOL "" FORCE)
+    set(GLFW_BUILD_X11 OFF CACHE BOOL "" FORCE)
+endif()
+set(BUILD_EXAMPLES OFF CACHE BOOL "" FORCE) # don't build the supplied examples for raylib
+set(BUILD_GAMES OFF CACHE BOOL "" FORCE) # or games
 find_package(raylib QUIET)
 if(NOT raylib_FOUND)
     FetchContent_Declare(
@@ -137,15 +143,13 @@ if(NOT raylib_FOUND)
     )
     FetchContent_MakeAvailable(raylib)
 endif()
-set(BUILD_EXAMPLES OFF CACHE BOOL "" FORCE) # don't build the supplied examples for raylib
-set(BUILD_GAMES OFF CACHE BOOL "" FORCE) # or games
 # --------------------------------------------------------------------------------------
 
 # raylib-cpp section
 # --------------------------------------------------------------------------------------
 find_package(raylib_cpp QUIET)
-if (NOT raylib_cpp_FOUND)
-    if (NOT DEFINED RAYLIB_CPP_VERSION)
+if(NOT raylib_cpp_FOUND)
+    if(NOT DEFINED RAYLIB_CPP_VERSION)
         set(RAYLIB_CPP_VERSION v6.0.0)
     endif()
     include(FetchContent)

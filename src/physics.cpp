@@ -113,6 +113,10 @@ void BasicActivationListener::OnBodyDeactivated(const JPH::BodyID& inBodyID,
     printf("body deactivated\n");
 }
 
+PhysicsManager::PhysicsManager()
+    : body_activation_listener(std::make_unique<BasicActivationListener>()),
+      body_contact_listener(std::make_unique<BasicContactListener>()) {}
+
 void PhysicsManager::InitPhysics(const PhysicsConfig config) {
     JPH::RegisterDefaultAllocator();
 
@@ -123,32 +127,26 @@ void PhysicsManager::InitPhysics(const PhysicsConfig config) {
 
     JPH::RegisterTypes();
 
-    temp_allocator = new JPH::TempAllocatorImpl(config.cTempAllocSize);
-    job_system = new JPH::JobSystemThreadPool(
+    temp_allocator =
+        std::make_unique<JPH::TempAllocatorImpl>(config.cTempAllocSize);
+    job_system = std::make_unique<JPH::JobSystemThreadPool>(
         JPH::cMaxPhysicsJobs, JPH::cMaxPhysicsBarriers,
         std::thread::hardware_concurrency() - 1);
 
-    BPLayerInterfaceImpl* broad_phase_layer_interface =
-        new BPLayerInterfaceImpl();
+    broad_phase_layer_interface = std::make_unique<BPLayerInterfaceImpl>();
+    object_vs_broadphase_layer_filter =
+        std::make_unique<ObjectVsBroadPhaseLayerFilterImpl>();
+    object_vs_object_layer_filter =
+        std::make_unique<ObjectLayerPairFilterImpl>();
 
-    ObjectVsBroadPhaseLayerFilterImpl* object_vs_broadphase_layer_filter =
-        new ObjectVsBroadPhaseLayerFilterImpl();
-
-    ObjectLayerPairFilterImpl* object_vs_object_layer_filter =
-        new ObjectLayerPairFilterImpl();
-
-    physics_system = new JPH::PhysicsSystem();
+    physics_system = std::make_unique<JPH::PhysicsSystem>();
     physics_system->Init(
         config.cMaxBodies, config.cNumBodyMutexes, config.cMaxBodyPairs,
         config.cMaxContactConstraints, *broad_phase_layer_interface,
         *object_vs_broadphase_layer_filter, *object_vs_object_layer_filter);
 
-    BasicActivationListener* body_activation_listener =
-        new BasicActivationListener();
-    physics_system->SetBodyActivationListener(body_activation_listener);
-
-    BasicContactListener* contact_listener = new BasicContactListener();
-    physics_system->SetContactListener(contact_listener);
+    physics_system->SetBodyActivationListener(body_activation_listener.get());
+    physics_system->SetContactListener(body_contact_listener.get());
 }
 
 void PhysicsManager::CleanupPhysics() {
@@ -172,8 +170,8 @@ void PhysicsManager::CleanupPhysics() {
 }
 
 void PhysicsManager::Update(const int collisionSteps) {
-    physics_system->Update(DELTA_TIME, collisionSteps, temp_allocator,
-                           job_system);
+    physics_system->Update(DELTA_TIME, collisionSteps, temp_allocator.get(),
+                           job_system.get());
 }
 
 JPH::BodyInterface& PhysicsManager::GetBodyInterface() {

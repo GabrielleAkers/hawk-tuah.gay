@@ -35,7 +35,7 @@ raylib::Camera InitCamera(void) {
     return camera;
 }
 
-gay::PhysicsManager* physics_manager;
+std::unique_ptr<gay::PhysicsManager> physics_manager;
 JPH::BodyID sphere_id;
 const float sphere_radius = 0.5f;
 
@@ -43,7 +43,7 @@ using namespace JPH::literals;
 
 static JPH::BodyID CreateFloorAndSphere(const float sphere_radius) {
     JPH::BodyInterface& body_interface = physics_manager->GetBodyInterface();
-    
+
     JPH::BodyCreationSettings floor_settings(
         new JPH::BoxShape(JPH::Vec3(100.0f, 1.0f, 100.0f)),
         JPH::RVec3(0.0_r, -1.0_r, 0.0_r), JPH::Quat::sIdentity(),
@@ -60,13 +60,11 @@ static JPH::BodyID CreateFloorAndSphere(const float sphere_radius) {
     body_interface.SetLinearVelocity(sphere_id, JPH::Vec3(0.0f, -5.0f, 0.0f));
     body_interface.SetRestitution(sphere_id, 0.8f);
 
-    physics_manager->physics_system->OptimizeBroadPhase();
-
     return sphere_id;
 }
 
 int main(int argc, char** argv) {
-    physics_manager = new gay::PhysicsManager();
+    physics_manager = std::make_unique<gay::PhysicsManager>();
     physics_manager->InitPhysics(gay::DEFAULT_PHYSICS_CONFIG);
     sphere_id = CreateFloorAndSphere(sphere_radius);
 
@@ -93,8 +91,7 @@ JPH::uint step = 0;
 void UpdateDrawFrame(void) {
     ++step;
 
-    JPH::BodyInterface& body_interface =
-        physics_manager->physics_system->GetBodyInterface();
+    JPH::BodyInterface& body_interface = physics_manager->GetBodyInterface();
     JPH::RVec3 sphere_position =
         body_interface.GetCenterOfMassPosition(sphere_id);
     JPH::RVec3 sphere_velocity = body_interface.GetLinearVelocity(sphere_id);

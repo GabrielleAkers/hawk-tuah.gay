@@ -121,11 +121,17 @@ const PhysicsConfig DEFAULT_PHYSICS_CONFIG =
 
 class PhysicsManager {
   private:
-    JPH::TempAllocatorImpl* temp_allocator = nullptr;
-    JPH::JobSystemThreadPool* job_system = nullptr;
+    std::unique_ptr<JPH::TempAllocatorImpl> temp_allocator;
+    std::unique_ptr<JPH::JobSystemThreadPool> job_system;
+    std::unique_ptr<JPH::PhysicsSystem> physics_system;
+    std::unique_ptr<JPH::BodyActivationListener> body_activation_listener;
+    std::unique_ptr<JPH::ContactListener> body_contact_listener;
+    std::unique_ptr<JPH::BroadPhaseLayerInterface> broad_phase_layer_interface;
+    std::unique_ptr<JPH::ObjectVsBroadPhaseLayerFilter> object_vs_broadphase_layer_filter;
+    std::unique_ptr<JPH::ObjectLayerPairFilter> object_vs_object_layer_filter;
 
   public:
-    JPH::PhysicsSystem* physics_system = nullptr;
+    PhysicsManager();
 
     void InitPhysics(const PhysicsConfig config);
     void CleanupPhysics();

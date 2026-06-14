@@ -127,7 +127,8 @@ class PhysicsManager {
     std::unique_ptr<JPH::BodyActivationListener> body_activation_listener;
     std::unique_ptr<JPH::ContactListener> body_contact_listener;
     std::unique_ptr<JPH::BroadPhaseLayerInterface> broad_phase_layer_interface;
-    std::unique_ptr<JPH::ObjectVsBroadPhaseLayerFilter> object_vs_broadphase_layer_filter;
+    std::unique_ptr<JPH::ObjectVsBroadPhaseLayerFilter>
+        object_vs_broadphase_layer_filter;
     std::unique_ptr<JPH::ObjectLayerPairFilter> object_vs_object_layer_filter;
 
   public:
@@ -136,6 +137,7 @@ class PhysicsManager {
     void InitPhysics(const PhysicsConfig config);
     void CleanupPhysics();
     void Update(const int collisionSteps);
+    void OptimizeBroadPhase();
     JPH::BodyInterface& GetBodyInterface();
 };
 

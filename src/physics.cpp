@@ -177,4 +177,8 @@ void PhysicsManager::Update(const int collisionSteps) {
 JPH::BodyInterface& PhysicsManager::GetBodyInterface() {
     return physics_system->GetBodyInterface();
 }
+
+void PhysicsManager::OptimizeBroadPhase() {
+    physics_system->OptimizeBroadPhase();
+}
 } // namespace gay

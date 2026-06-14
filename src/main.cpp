@@ -49,7 +49,7 @@ static JPH::BodyID CreateFloorAndSphere(const float sphere_radius) {
         JPH::RVec3(0.0_r, -1.0_r, 0.0_r), JPH::Quat::sIdentity(),
         JPH::EMotionType::Static, gay::Layers::NON_MOVING);
     JPH::BodyID floor_id = body_interface.CreateAndAddBody(
-        floor_settings, JPH::EActivation::Activate);
+        floor_settings, JPH::EActivation::DontActivate);
 
     JPH::BodyCreationSettings sphere_settings(
         new JPH::SphereShape(sphere_radius), JPH::RVec3(0.0_r, 10.0_r, 0.0_r),

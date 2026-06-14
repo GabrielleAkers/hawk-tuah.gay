@@ -12,6 +12,8 @@
 #include <Jolt/Physics/PhysicsSystem.h>
 #include <Jolt/RegisterTypes.h>
 
+JPH_SUPPRESS_WARNINGS
+
 namespace gay {
 namespace Layers {
 static constexpr JPH::ObjectLayer NON_MOVING = 0;
@@ -117,7 +119,7 @@ struct PhysicsConfig {
 const PhysicsConfig DEFAULT_PHYSICS_CONFIG =
     PhysicsConfig(1024, 0, 1024, 1024, 10 * 1024 * 1024);
 
-class PhysicsHandler {
+class PhysicsManager {
   private:
     JPH::TempAllocatorImpl* temp_allocator = nullptr;
     JPH::JobSystemThreadPool* job_system = nullptr;
@@ -128,6 +130,7 @@ class PhysicsHandler {
     void InitPhysics(const PhysicsConfig config);
     void CleanupPhysics();
     void Update(const int collisionSteps);
+    JPH::BodyInterface& GetBodyInterface();
 };
 
 } // namespace gay

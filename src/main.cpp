@@ -1,13 +1,3 @@
-// Jolt Physics Library (https://github.com/jrouwe/JoltPhysics)
-// SPDX-FileCopyrightText: 2025 Jorrit Rouwe
-// SPDX-License-Identifier: CC0-1.0
-// This file is in the public domain. It serves as an example to start building
-// your own application using Jolt Physics. Feel free to copy paste without
-// attribution!
-
-// The Jolt headers don't include Jolt.h. Always include Jolt.h before including
-// any other Jolt header. You can use Jolt.h in your precompiled header to speed
-// up compilation.
 #include "gaycyberspace.h"
 #include "raylib-cpp.hpp"
 #include "rlgl.h"
@@ -45,55 +35,38 @@ raylib::Camera InitCamera(void) {
     return camera;
 }
 
-// Disable common warnings triggered by Jolt, you can use
-// JPH_SUPPRESS_WARNING_PUSH / JPH_SUPPRESS_WARNING_POP to store and restore the
-// warning state
-JPH_SUPPRESS_WARNINGS
-
-gay::PhysicsHandler* physics_handler;
-// Now we can create the actual physics system.
+gay::PhysicsManager* physics_manager;
 JPH::BodyID sphere_id;
 const float sphere_radius = 0.5f;
 
 using namespace JPH::literals;
 
 static JPH::BodyID CreateFloorAndSphere(const float sphere_radius) {
-    JPH::BodyInterface& body_interface = physics_handler->physics_system->GetBodyInterface();
-    printf("a\n");
+    JPH::BodyInterface& body_interface = physics_manager->GetBodyInterface();
+    
     JPH::BodyCreationSettings floor_settings(
         new JPH::BoxShape(JPH::Vec3(100.0f, 1.0f, 100.0f)),
         JPH::RVec3(0.0_r, -1.0_r, 0.0_r), JPH::Quat::sIdentity(),
         JPH::EMotionType::Static, gay::Layers::NON_MOVING);
-    // Create the actual rigid body
     JPH::BodyID floor_id = body_interface.CreateAndAddBody(
         floor_settings, JPH::EActivation::Activate);
 
-    printf("b\n");
-    // Now create a dynamic body to bounce on the floor
-    // Note that this uses the shorthand version of creating and adding a body
-    // to the world
     JPH::BodyCreationSettings sphere_settings(
-        new JPH::SphereShape(sphere_radius), JPH::RVec3(0.0_r, 20.0_r, 0.0_r),
+        new JPH::SphereShape(sphere_radius), JPH::RVec3(0.0_r, 10.0_r, 0.0_r),
         JPH::Quat::sIdentity(), JPH::EMotionType::Dynamic, gay::Layers::MOVING);
     JPH::BodyID sphere_id = body_interface.CreateAndAddBody(
         sphere_settings, JPH::EActivation::Activate);
 
-    printf("c\n");
-    // Now you can interact with the dynamic body, in this case we're going to
-    // give it a velocity. (note that if we had used CreateBody then we could
-    // have set the velocity straight on the body before adding it to the
-    // physics system)
     body_interface.SetLinearVelocity(sphere_id, JPH::Vec3(0.0f, -5.0f, 0.0f));
 
-    physics_handler->physics_system->OptimizeBroadPhase();
+    physics_manager->physics_system->OptimizeBroadPhase();
 
     return sphere_id;
 }
 
-// Program entry point
 int main(int argc, char** argv) {
-    physics_handler = new gay::PhysicsHandler();
-    physics_handler->InitPhysics(gay::DEFAULT_PHYSICS_CONFIG);
+    physics_manager = new gay::PhysicsManager();
+    physics_manager->InitPhysics(gay::DEFAULT_PHYSICS_CONFIG);
     sphere_id = CreateFloorAndSphere(sphere_radius);
 
     window.Init(screenWidth, screenHeight, "Hawk Tuah! 🏳️‍⚧️");
@@ -110,7 +83,7 @@ int main(int argc, char** argv) {
 
     window.Close();
 
-    physics_handler->CleanupPhysics();
+    physics_manager->CleanupPhysics();
 
     return 0;
 }
@@ -120,18 +93,14 @@ void UpdateDrawFrame(void) {
     ++step;
 
     JPH::BodyInterface& body_interface =
-        physics_handler->physics_system->GetBodyInterface();
+        physics_manager->physics_system->GetBodyInterface();
     JPH::RVec3 sphere_position =
         body_interface.GetCenterOfMassPosition(sphere_id);
     JPH::RVec3 sphere_velocity = body_interface.GetLinearVelocity(sphere_id);
-    // Output current position and velocity of the sphere
-    // If you take larger steps than 1 / 60th of a second you need to do
-    // multiple collision steps in order to keep the simulation stable. Do 1
-    // collision step per 1 / 60th of a second (round up).
+
     const int cCollisionSteps = 1;
 
-    // Step the world
-    physics_handler->Update(cCollisionSteps);
+    physics_manager->Update(cCollisionSteps);
 
     // camera.Update(CAMERA_FIRST_PERSON);
 

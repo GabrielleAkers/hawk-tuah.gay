@@ -58,6 +58,7 @@ static JPH::BodyID CreateFloorAndSphere(const float sphere_radius) {
         sphere_settings, JPH::EActivation::Activate);
 
     body_interface.SetLinearVelocity(sphere_id, JPH::Vec3(0.0f, -5.0f, 0.0f));
+    body_interface.SetRestitution(sphere_id, 0.8f);
 
     physics_manager->physics_system->OptimizeBroadPhase();
 

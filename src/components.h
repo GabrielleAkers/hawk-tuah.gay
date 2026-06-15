@@ -1,0 +1,38 @@
+
+#pragma once
+
+#include "physics.h"
+#include "raylib-cpp.hpp"
+
+#include <Jolt/Jolt.h>
+#include <memory>
+#include <variant>
+
+namespace gay {
+struct Transform {
+    raylib::Vector3 position;
+    raylib::Quaternion rotation;
+};
+
+struct SphereCollider {
+    std::shared_ptr<JPH::SphereShape> shape;
+};
+
+struct BoxCollider {
+    std::shared_ptr<JPH::BoxShape> shape;
+};
+
+using Collider = std::variant<SphereCollider, BoxCollider>;
+
+struct RigidBody {
+    JPH::BodyID id;
+    JPH::EMotionType motion_type;
+    JPH::ObjectLayer layer;
+    JPH::EActivation activation_mode;
+
+    JPH::Vec3 initial_linear_velocity;
+    JPH::Vec3 initial_angular_velocity;
+
+    float restitution;
+};
+} // namespace gay

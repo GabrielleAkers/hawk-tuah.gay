@@ -136,7 +136,7 @@ class PhysicsManager {
 
     void InitPhysics(const PhysicsConfig config);
     void CleanupPhysics();
-    void Update(const int collisionSteps);
+    void Update(float dt, const int collisionSteps);
     void OptimizeBroadPhase();
     JPH::BodyInterface& GetBodyInterface();
 };

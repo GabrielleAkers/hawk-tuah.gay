@@ -122,7 +122,7 @@ endif()
 
 # # Enable link time optimization in Release and Distribution mode if requested and available
 # SET_INTERPROCEDURAL_OPTIMIZATION()
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g3")
 # --------------------------------------------------------------------------------------
 
 # raylib section

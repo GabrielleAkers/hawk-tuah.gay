@@ -169,8 +169,8 @@ void PhysicsManager::CleanupPhysics() {
     printf("physics cleaned up\n");
 }
 
-void PhysicsManager::Update(const int collisionSteps) {
-    physics_system->Update(DELTA_TIME, collisionSteps, temp_allocator.get(),
+void PhysicsManager::Update(float dt, const int collisionSteps) {
+    physics_system->Update(dt, collisionSteps, temp_allocator.get(),
                            job_system.get());
 }
 

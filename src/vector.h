@@ -15,4 +15,6 @@ JPH::Vec3 JPHVec3FromRaylib(const raylib::Vector3& vec);
 raylib::Vector4 raylibVector4FromJPH(const JPH::Vec4& vec);
 
 JPH::Vec4 JPHVec4FromRaylib(const raylib::Vector4& vec);
+
+JPH::QuatArg JPHQuatFromRaylib(const raylib::Quaternion& quat);
 } // namespace gay

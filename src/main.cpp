@@ -2,6 +2,9 @@
 #include "raylib-cpp.hpp"
 #include "rlgl.h"
 
+#include <Jolt/Jolt.h>
+#include <Jolt/Physics/Collision/Shape/ConvexHullShape.h>
+
 #if defined(PLATFORM_WEB)
 #include <emscripten/emscripten.h>
 #endif
@@ -32,7 +35,7 @@ raylib::Matrix light_view_proj;
 raylib::Vector3 light_dir;
 std::shared_ptr<raylib::Model> sphere_model;
 
-gay::EntityHandle floor_handle;
+gay::EntityHandle house_handle;
 
 static void UpdateDrawFrame(float dt);
 static raylib::Camera InitCamera(void);
@@ -44,7 +47,7 @@ static void MakeABunchOfSpheres(int num_spheres);
 
 const float sphere_radius = 0.5f;
 const int shadowmap_resolution = 1024;
-const float shadow_distance = -10.0f;
+const float shadow_distance = -50.0f;
 const int num_spheres = 10;
 int texture_active_slot = 10;
 int light_vp_loc;
@@ -55,6 +58,8 @@ std::unique_ptr<gay::World> world;
 int main(int argc, char** argv) {
     SetConfigFlags(FLAG_MSAA_4X_HINT + FLAG_WINDOW_RESIZABLE);
     window.Init(screen_width, screen_height, "Hawk Tuah! 🏳️‍⚧️");
+
+    DisableCursor();
     camera = InitCamera();
 
     shadow_shader =
@@ -77,15 +82,15 @@ int main(int argc, char** argv) {
     world->SetSystemSignature<gay::ModelRenderSystem, gay::Transform,
                               gay::ModelRenderer>();
 
-    floor_handle = world->CreateEntity();
+    auto floor_handle = world->CreateEntity();
 
     floor_handle.AddComponent(gay::Transform{
-        .position = raylib::Vector3{0.0f, -1.0f, 0.0f},
+        .position = raylib::Vector3{0.0f, 0.0f, 0.0f},
         .rotation = raylib::Quaternion::Identity(),
     });
     floor_handle.AddComponent(
         gay::Collider(gay::BoxCollider{.shape = std::make_shared<JPH::BoxShape>(
-                                           JPH::Vec3(100.0f, 1.0f, 100.0f))}));
+                                           JPH::Vec3(100.0f, 0.0f, 100.0f))}));
     floor_handle.AddComponent(gay::RigidBody{
         .motion_type = JPH::EMotionType::Static,
         .layer = gay::Layers::NON_MOVING,
@@ -95,9 +100,8 @@ int main(int argc, char** argv) {
     auto floor_shape =
         floor_handle.GetComponent<gay::Collider, gay::BoxCollider>().shape;
     JPH::Vec3 extents = floor_shape->GetHalfExtent();
-    auto floor_model =
-        std::make_shared<raylib::Model>(LoadModelFromMesh(GenMeshCube(
-            extents.GetX(), extents.GetY() + sphere_radius, extents.GetZ())));
+    auto floor_model = std::make_shared<raylib::Model>(LoadModelFromMesh(
+        GenMeshCube(extents.GetX(), extents.GetY(), extents.GetZ())));
     floor_model->materials[0].shader = shadow_shader;
 
     floor_handle.AddComponent(
@@ -111,7 +115,37 @@ int main(int argc, char** argv) {
         LoadModelFromMesh(GenMeshSphere(sphere_radius, 32, 32)));
     sphere_model->materials[0].shader = shadow_shader;
 
-    MakeABunchOfSpheres(num_spheres);
+    // MakeABunchOfSpheres(num_spheres);
+
+    house_handle = world->CreateEntity();
+    house_handle.AddComponent(gay::Transform{
+        .position = raylib::Vector3::Zero(),
+        .rotation = raylib::Quaternion::Identity(),
+    });
+    auto house_model = std::make_shared<raylib::Model>(
+        raylib::Model(ASSETS_PATH "house1.glb"));
+    house_model->materials[0].shader = shadow_shader;
+    house_handle.AddComponent(
+        gay::ModelRenderer{.model = house_model,
+                           .rotation_axis = raylib::Vector3(0.0f, 1.0f, 0.0f),
+                           .rotation_angle = 0.0f,
+                           .scale = raylib::Vector3::One(),
+                           .tint = raylib::Color::White()});
+    house_handle.AddComponent(gay::RigidBody{
+        .motion_type = JPH::EMotionType::Static,
+        .layer = gay::Layers::NON_MOVING,
+        .activation_mode = JPH::EActivation::DontActivate,
+    });
+    printf("house mesh count %d\n", house_model->GetMeshCount());
+    auto house_min_bounds = house_model->GetBoundingBox().min;
+    auto house_max_bounds = house_model->GetBoundingBox().max;
+    house_handle.AddComponent(gay::Collider(
+        gay::BoxCollider{.shape = std::make_shared<JPH::BoxShape>(JPH::Vec3(
+                             house_max_bounds.x - house_min_bounds.x,
+                             house_max_bounds.y - house_min_bounds.y,
+                             house_max_bounds.z - house_min_bounds.z))}));
+
+    MakeABunchOfSpheres(10);
 
     physics_system->Init();
 
@@ -119,7 +153,7 @@ int main(int argc, char** argv) {
 #if defined(PLATFORM_WEB)
     emscripten_set_main_loop(UpdateDrawFrame, 0, 1);
 #else
-    SetTargetFPS(60);
+    SetTargetFPS(GetMonitorRefreshRate(window.GetMonitor()));
     float dt = 0.0f;
     while (!WindowShouldClose()) {
         auto start_time = std::chrono::high_resolution_clock::now();
@@ -142,8 +176,8 @@ int main(int argc, char** argv) {
 
 static raylib::Camera InitCamera(void) {
     raylib::Camera camera = (raylib::Vector3){0, 0, 0};
-    camera.position = (raylib::Vector3){10.0f, 10.0f, 10.0f};
-    camera.target = (raylib::Vector3){0.0f, 0.0f, 0.0f};
+    camera.position = (raylib::Vector3){10.0f, 2.0f, 0.0f};
+    camera.target = (raylib::Vector3){0.0f, 2.0f, 0.0f};
     camera.up = (raylib::Vector3){0.0f, 1.0f, 0.0f};
     camera.fovy = 60.0f;
     camera.projection = CAMERA_PERSPECTIVE;
@@ -163,32 +197,35 @@ static raylib::Camera InitLightCamera(raylib::Vector3 light_dir) {
 }
 
 JPH::uint step = 0;
+const float camera_speed = 0.05f;
+
 static void UpdateDrawFrame(float dt) {
+    if (raylib::Keyboard::IsKeyPressed(KEY_F11))
+        window.ToggleFullscreen();
+    if (raylib::Keyboard::IsKeyDown(KEY_LEFT)) {
+        if (light_dir.x < 0.6f)
+            light_dir.x += camera_speed * 60.0f * dt;
+    }
+    if (raylib::Keyboard::IsKeyDown(KEY_RIGHT)) {
+        if (light_dir.x > -0.6f)
+            light_dir.x -= camera_speed * 60.0f * dt;
+    }
+    if (raylib::Keyboard::IsKeyDown(KEY_UP)) {
+        if (light_dir.z < 0.6f)
+            light_dir.z += camera_speed * 60.0f * dt;
+    }
+    if (raylib::Keyboard::IsKeyDown(KEY_DOWN)) {
+        if (light_dir.z > -0.6f)
+            light_dir.z -= camera_speed * 60.0f * dt;
+    }
+
     auto physics_system = world->GetSystem<gay::PhysicsSystem>();
     auto model_render_system = world->GetSystem<gay::ModelRenderSystem>();
     ++step;
 
     physics_system->Update(gay::DELTA_TIME);
 
-    camera.Update(CAMERA_ORBITAL);
-
-    const float camera_speed = 0.05f;
-    if (IsKeyDown(KEY_LEFT)) {
-        if (light_dir.x < 0.6f)
-            light_dir.x += camera_speed * 60.0f * dt;
-    }
-    if (IsKeyDown(KEY_RIGHT)) {
-        if (light_dir.x > -0.6f)
-            light_dir.x -= camera_speed * 60.0f * dt;
-    }
-    if (IsKeyDown(KEY_UP)) {
-        if (light_dir.z < 0.6f)
-            light_dir.z += camera_speed * 60.0f * dt;
-    }
-    if (IsKeyDown(KEY_DOWN)) {
-        if (light_dir.z > -0.6f)
-            light_dir.z -= camera_speed * 60.0f * dt;
-    }
+    camera.Update(CAMERA_FIRST_PERSON);
 
     light_dir = Vector3Normalize(light_dir);
     light_camera.position = Vector3Scale(light_dir, shadow_distance);

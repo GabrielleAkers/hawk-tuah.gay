@@ -128,8 +128,8 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g3")
 # raylib section
 # --------------------------------------------------------------------------------------
 if(NOT "${PLATFORM}" STREQUAL "Web")
-    set(GLFW_BUILD_WAYLAND ON CACHE BOOL "" FORCE)
-    set(GLFW_BUILD_X11 OFF CACHE BOOL "" FORCE)
+    set(GLFW_BUILD_WAYLAND OFF CACHE BOOL "" FORCE)
+    set(GLFW_BUILD_X11 ON CACHE BOOL "" FORCE) # wayland doesnt expose a way to set the mouse position in the big 26 LOL
 endif()
 set(BUILD_EXAMPLES OFF CACHE BOOL "" FORCE) # don't build the supplied examples for raylib
 set(BUILD_GAMES OFF CACHE BOOL "" FORCE) # or games

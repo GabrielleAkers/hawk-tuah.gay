@@ -94,27 +94,16 @@ int main(int argc, char** argv) {
                        .restitution = 0.8f});
 
     physics_system->Init();
+
+    SetConfigFlags(FLAG_MSAA_4X_HINT + FLAG_WINDOW_RESIZABLE);
     window.Init(screen_width, screen_height, "Hawk Tuah! 🏳️‍⚧️");
-
-    // testing stuff
-    auto floor_shape =
-        floor_handle.GetComponent<gay::Collider, gay::BoxCollider>().shape;
-    JPH::Vec3 extents = floor_shape->GetHalfExtent();
-    floor_model = LoadModelFromMesh(
-        GenMeshCube(extents.GetX(), extents.GetY(), extents.GetZ()));
-    floor_model.materials[0].shader = shadow_shader;
-
-    auto sphere_shape =
-        sphere_handle.GetComponent<gay::Collider, gay::SphereCollider>().shape;
-    auto radius = sphere_shape->GetRadius();
-    sphere_model = LoadModelFromMesh(GenMeshSphere(radius, 3, 3));
-    sphere_model.materials[0].shader = shadow_shader;
-    //
-
     camera = InitCamera();
 
     shadow_shader =
         LoadShader(ASSETS_PATH "shadow.vs", ASSETS_PATH "shadow.fs");
+    shadow_shader.locs[SHADER_LOC_VECTOR_VIEW] =
+        GetShaderLocation(shadow_shader, "viewPos");
+
     light_dir = Vector3Normalize((raylib::Vector3){0.35f, -1.0f, -0.35f});
     raylib::Color light_color = WHITE;
     raylib::Vector4 light_color_normalized = ColorNormalize(light_color);
@@ -132,6 +121,21 @@ int main(int argc, char** argv) {
     SetShaderValue(shadow_shader,
                    GetShaderLocation(shadow_shader, "shadowMapResolution"),
                    &shadowmap_resolution, SHADER_UNIFORM_INT);
+
+    // testing stuff
+    auto floor_shape =
+        floor_handle.GetComponent<gay::Collider, gay::BoxCollider>().shape;
+    JPH::Vec3 extents = floor_shape->GetHalfExtent();
+    floor_model = LoadModelFromMesh(GenMeshCube(
+        extents.GetX(), extents.GetY() + sphere_radius, extents.GetZ()));
+    floor_model.materials[0].shader = shadow_shader;
+
+    auto sphere_shape =
+        sphere_handle.GetComponent<gay::Collider, gay::SphereCollider>().shape;
+    auto radius = sphere_shape->GetRadius();
+    sphere_model = LoadModelFromMesh(GenMeshSphere(radius, 32, 32));
+    sphere_model.materials[0].shader = shadow_shader;
+    //
 
     shadow_map =
         LoadRenderTextureDepthTex(shadowmap_resolution, shadowmap_resolution);
@@ -178,7 +182,7 @@ static raylib::Camera InitLightCamera(raylib::Vector3 light_dir) {
     light_camera.projection =
         CAMERA_ORTHOGRAPHIC; // Use an orthographic projection for directional
                              // lights
-    light_camera.up = (Vector3){0.0f, 1.0f, 0.0f};
+    light_camera.up = (raylib::Vector3){0.0f, 1.0f, 0.0f};
     light_camera.fovy = 20.0f;
     return light_camera;
 }

@@ -30,20 +30,22 @@ raylib::Matrix light_view;
 raylib::Matrix light_proj;
 raylib::Matrix light_view_proj;
 raylib::Vector3 light_dir;
-raylib::Model sphere_model;
+std::shared_ptr<raylib::Model> sphere_model;
 
 gay::EntityHandle floor_handle;
-gay::EntityHandle sphere_handle;
 
 static void UpdateDrawFrame(float dt);
 static raylib::Camera InitCamera(void);
 static raylib::Camera InitLightCamera(raylib::Vector3 light_dir);
 static raylib::RenderTexture2D LoadRenderTextureDepthTex(int width, int height);
 static void UnloadRenderTextureDepthTex(raylib::RenderTexture2D target);
+static void SetupShadowmapStuff();
+static void MakeABunchOfSpheres(int num_spheres);
 
 const float sphere_radius = 0.5f;
 const int shadowmap_resolution = 1024;
 const float shadow_distance = -10.0f;
+const int num_spheres = 10;
 int texture_active_slot = 10;
 int light_vp_loc;
 int shadow_map_loc;
@@ -105,55 +107,15 @@ int main(int argc, char** argv) {
                            .scale = raylib::Vector3::One(),
                            .tint = raylib::Color::Blue()});
 
-    sphere_handle = world->CreateEntity();
-    sphere_handle.AddComponent(gay::Transform{
-        .position = raylib::Vector3{0.0f, 10.0f, 0.0f},
-        .rotation = raylib::Quaternion::Identity(),
-    });
-    sphere_handle.AddComponent(gay::Collider(gay::SphereCollider{
-        .shape = std::make_shared<JPH::SphereShape>(sphere_radius)}));
-    sphere_handle.AddComponent(
-        gay::RigidBody{.motion_type = JPH::EMotionType::Dynamic,
-                       .layer = gay::Layers::MOVING,
-                       .activation_mode = JPH::EActivation::Activate,
-                       .initial_linear_velocity = JPH::Vec3(0.0f, -5.0f, 0.0f),
-                       .restitution = 1.0f});
-
-    auto sphere_model = std::make_shared<raylib::Model>(
+    sphere_model = std::make_shared<raylib::Model>(
         LoadModelFromMesh(GenMeshSphere(sphere_radius, 32, 32)));
     sphere_model->materials[0].shader = shadow_shader;
 
-    sphere_handle.AddComponent(
-        gay::ModelRenderer{.model = sphere_model,
-                           .rotation_axis = raylib::Vector3(0.0f, 1.0f, 0.0f),
-                           .rotation_angle = 0.0f,
-                           .scale = raylib::Vector3::One(),
-                           .tint = raylib::Color::Red()});
+    MakeABunchOfSpheres(num_spheres);
 
     physics_system->Init();
 
-    light_dir = Vector3Normalize((raylib::Vector3){0.35f, -1.0f, -0.35f});
-    raylib::Color light_color = WHITE;
-    raylib::Vector4 light_color_normalized = ColorNormalize(light_color);
-    int light_dir_loc = GetShaderLocation(shadow_shader, "lightDir");
-    int light_col_loc = GetShaderLocation(shadow_shader, "lightColor");
-    SetShaderValue(shadow_shader, light_dir_loc, &light_dir,
-                   SHADER_UNIFORM_VEC3);
-    SetShaderValue(shadow_shader, light_col_loc, &light_color_normalized,
-                   SHADER_UNIFORM_VEC4);
-    int ambient_loc = GetShaderLocation(shadow_shader, "ambient");
-    float ambient[4] = {0.1f, 0.1f, 0.1f, 1.0f};
-    SetShaderValue(shadow_shader, ambient_loc, ambient, SHADER_UNIFORM_VEC4);
-    light_vp_loc = GetShaderLocation(shadow_shader, "lightVP");
-    shadow_map_loc = GetShaderLocation(shadow_shader, "shadowMap");
-    SetShaderValue(shadow_shader,
-                   GetShaderLocation(shadow_shader, "shadowMapResolution"),
-                   &shadowmap_resolution, SHADER_UNIFORM_INT);
-
-    shadow_map =
-        LoadRenderTextureDepthTex(shadowmap_resolution, shadowmap_resolution);
-
-    light_camera = InitLightCamera(light_dir);
+    SetupShadowmapStuff();
 #if defined(PLATFORM_WEB)
     emscripten_set_main_loop(UpdateDrawFrame, 0, 1);
 #else
@@ -208,6 +170,8 @@ static void UpdateDrawFrame(float dt) {
 
     physics_system->Update(gay::DELTA_TIME);
 
+    camera.Update(CAMERA_ORBITAL);
+
     const float camera_speed = 0.05f;
     if (IsKeyDown(KEY_LEFT)) {
         if (light_dir.x < 0.6f)
@@ -237,7 +201,6 @@ static void UpdateDrawFrame(float dt) {
     light_camera.BeginMode();
     light_view = rlGetMatrixModelview();
     light_proj = rlGetMatrixProjection();
-    // physics_system->Render();
     model_render_system->Render();
 
     light_camera.EndMode();
@@ -256,7 +219,6 @@ static void UpdateDrawFrame(float dt) {
     rlSetUniform(shadow_map_loc, &texture_active_slot, SHADER_UNIFORM_INT, 1);
 
     camera.BeginMode();
-    // physics_system->Render();
     model_render_system->Render();
     camera.EndMode();
 
@@ -297,4 +259,57 @@ static raylib::RenderTexture2D LoadRenderTextureDepthTex(int width,
         TRACELOG(LOG_WARNING, "FBO: Framebuffer object can not be created");
 
     return target;
+}
+
+static void MakeABunchOfSpheres(int num_spheres) {
+    std::default_random_engine generator;
+    std::uniform_real_distribution<float> rand_position(-10.0f, 10.0f);
+    std::uniform_real_distribution<float> rand_height(10.0f, 20.0f);
+    for (int i = 0; i < num_spheres; i++) {
+        auto sphere_handle = world->CreateEntity();
+        sphere_handle.AddComponent(gay::Transform{
+            .position = raylib::Vector3{rand_position(generator),
+                                        rand_height(generator),
+                                        rand_position(generator)},
+            .rotation = raylib::Quaternion::Identity(),
+        });
+        sphere_handle.AddComponent(gay::Collider(gay::SphereCollider{
+            .shape = std::make_shared<JPH::SphereShape>(sphere_radius)}));
+        sphere_handle.AddComponent(gay::RigidBody{
+            .motion_type = JPH::EMotionType::Dynamic,
+            .layer = gay::Layers::MOVING,
+            .activation_mode = JPH::EActivation::Activate,
+            .initial_linear_velocity = JPH::Vec3(0.0f, -5.0f, 0.0f),
+            .restitution = 1.0f});
+        sphere_handle.AddComponent(gay::ModelRenderer{
+            .model = sphere_model,
+            .rotation_axis = raylib::Vector3(0.0f, 1.0f, 0.0f),
+            .rotation_angle = 0.0f,
+            .scale = raylib::Vector3::One(),
+            .tint = raylib::Color::Red()});
+    }
+}
+
+static void SetupShadowmapStuff() {
+    light_dir = Vector3Normalize((raylib::Vector3){0.35f, -1.0f, -0.35f});
+    raylib::Color light_color = WHITE;
+    raylib::Vector4 light_color_normalized = ColorNormalize(light_color);
+    int light_dir_loc = GetShaderLocation(shadow_shader, "lightDir");
+    int light_col_loc = GetShaderLocation(shadow_shader, "lightColor");
+    SetShaderValue(shadow_shader, light_dir_loc, &light_dir,
+                   SHADER_UNIFORM_VEC3);
+    SetShaderValue(shadow_shader, light_col_loc, &light_color_normalized,
+                   SHADER_UNIFORM_VEC4);
+    int ambient_loc = GetShaderLocation(shadow_shader, "ambient");
+    float ambient[4] = {0.1f, 0.1f, 0.1f, 1.0f};
+    SetShaderValue(shadow_shader, ambient_loc, ambient, SHADER_UNIFORM_VEC4);
+    light_vp_loc = GetShaderLocation(shadow_shader, "lightVP");
+    shadow_map_loc = GetShaderLocation(shadow_shader, "shadowMap");
+    SetShaderValue(shadow_shader,
+                   GetShaderLocation(shadow_shader, "shadowMapResolution"),
+                   &shadowmap_resolution, SHADER_UNIFORM_INT);
+
+    shadow_map =
+        LoadRenderTextureDepthTex(shadowmap_resolution, shadowmap_resolution);
+    light_camera = InitLightCamera(light_dir);
 }

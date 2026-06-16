@@ -6,5 +6,6 @@
 #include "./entityhandle.h"
 #include "./components.h"
 #include "./physicssystem.h"
+#include "./modelrendersystem.h"
 
 namespace gay {}

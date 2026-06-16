@@ -69,29 +69,5 @@ void PhysicsSystem::Update(float dt) {
     physics_manager->Update(DELTA_TIME, collision_steps);
 }
 
-void PhysicsSystem::Render() {
-    auto& body_interface = physics_manager->GetBodyInterface();
-
-    for (auto const& entity : entities) {
-        auto& rigid_body = world->GetComponent<RigidBody>(entity);
-        auto& transform = world->GetComponent<Transform>(entity);
-        auto& collider = world->GetComponent<Collider>(entity);
-
-        std::visit(
-            [&](auto&& arg) {
-                using T = std::decay_t<decltype(arg)>;
-                if constexpr (std::is_same_v<T, BoxCollider>) {
-                    JPH::Vec3 extents = arg.shape->GetHalfExtent();
-                    DrawCube(transform.position, extents.GetX(), extents.GetY(),
-                             extents.GetZ(), raylib::Color::Red());
-                } else if constexpr (std::is_same_v<T, SphereCollider>) {
-                    DrawSphere(transform.position, arg.shape->GetRadius(),
-                               raylib::Color::Blue());
-                }
-            },
-            collider);
-    }
-}
-
 void PhysicsSystem::Cleanup() { physics_manager->CleanupPhysics(); }
 } // namespace gay

@@ -30,7 +30,6 @@ raylib::Matrix light_view;
 raylib::Matrix light_proj;
 raylib::Matrix light_view_proj;
 raylib::Vector3 light_dir;
-raylib::Model floor_model;
 raylib::Model sphere_model;
 
 gay::EntityHandle floor_handle;
@@ -41,10 +40,10 @@ static raylib::Camera InitCamera(void);
 static raylib::Camera InitLightCamera(raylib::Vector3 light_dir);
 static raylib::RenderTexture2D LoadRenderTextureDepthTex(int width, int height);
 static void UnloadRenderTextureDepthTex(raylib::RenderTexture2D target);
-static void DrawSphereAndFloor();
 
 const float sphere_radius = 0.5f;
 const int shadowmap_resolution = 1024;
+const float shadow_distance = -10.0f;
 int texture_active_slot = 10;
 int light_vp_loc;
 int shadow_map_loc;
@@ -52,17 +51,29 @@ int shadow_map_loc;
 std::unique_ptr<gay::World> world;
 
 int main(int argc, char** argv) {
+    SetConfigFlags(FLAG_MSAA_4X_HINT + FLAG_WINDOW_RESIZABLE);
+    window.Init(screen_width, screen_height, "Hawk Tuah! 🏳️‍⚧️");
+    camera = InitCamera();
+
+    shadow_shader =
+        LoadShader(ASSETS_PATH "shadow.vs", ASSETS_PATH "shadow.fs");
+    shadow_shader.locs[SHADER_LOC_VECTOR_VIEW] =
+        GetShaderLocation(shadow_shader, "viewPos");
+
     world = std::make_unique<gay::World>();
     world->Init();
 
     world->RegisterComponent<gay::Transform>();
     world->RegisterComponent<gay::Collider>();
     world->RegisterComponent<gay::RigidBody>();
+    world->RegisterComponent<gay::ModelRenderer>();
 
     auto physics_system = world->RegisterSystem<gay::PhysicsSystem>();
-
     world->SetSystemSignature<gay::PhysicsSystem, gay::Transform, gay::Collider,
                               gay::RigidBody>();
+    auto model_renderer = world->RegisterSystem<gay::ModelRenderSystem>();
+    world->SetSystemSignature<gay::ModelRenderSystem, gay::Transform,
+                              gay::ModelRenderer>();
 
     floor_handle = world->CreateEntity();
 
@@ -79,6 +90,21 @@ int main(int argc, char** argv) {
         .activation_mode = JPH::EActivation::DontActivate,
     });
 
+    auto floor_shape =
+        floor_handle.GetComponent<gay::Collider, gay::BoxCollider>().shape;
+    JPH::Vec3 extents = floor_shape->GetHalfExtent();
+    auto floor_model =
+        std::make_shared<raylib::Model>(LoadModelFromMesh(GenMeshCube(
+            extents.GetX(), extents.GetY() + sphere_radius, extents.GetZ())));
+    floor_model->materials[0].shader = shadow_shader;
+
+    floor_handle.AddComponent(
+        gay::ModelRenderer{.model = floor_model,
+                           .rotation_axis = raylib::Vector3(0.0f, 1.0f, 0.0f),
+                           .rotation_angle = 0.0f,
+                           .scale = raylib::Vector3::One(),
+                           .tint = raylib::Color::Blue()});
+
     sphere_handle = world->CreateEntity();
     sphere_handle.AddComponent(gay::Transform{
         .position = raylib::Vector3{0.0f, 10.0f, 0.0f},
@@ -91,18 +117,20 @@ int main(int argc, char** argv) {
                        .layer = gay::Layers::MOVING,
                        .activation_mode = JPH::EActivation::Activate,
                        .initial_linear_velocity = JPH::Vec3(0.0f, -5.0f, 0.0f),
-                       .restitution = 0.8f});
+                       .restitution = 1.0f});
+
+    auto sphere_model = std::make_shared<raylib::Model>(
+        LoadModelFromMesh(GenMeshSphere(sphere_radius, 32, 32)));
+    sphere_model->materials[0].shader = shadow_shader;
+
+    sphere_handle.AddComponent(
+        gay::ModelRenderer{.model = sphere_model,
+                           .rotation_axis = raylib::Vector3(0.0f, 1.0f, 0.0f),
+                           .rotation_angle = 0.0f,
+                           .scale = raylib::Vector3::One(),
+                           .tint = raylib::Color::Red()});
 
     physics_system->Init();
-
-    SetConfigFlags(FLAG_MSAA_4X_HINT + FLAG_WINDOW_RESIZABLE);
-    window.Init(screen_width, screen_height, "Hawk Tuah! 🏳️‍⚧️");
-    camera = InitCamera();
-
-    shadow_shader =
-        LoadShader(ASSETS_PATH "shadow.vs", ASSETS_PATH "shadow.fs");
-    shadow_shader.locs[SHADER_LOC_VECTOR_VIEW] =
-        GetShaderLocation(shadow_shader, "viewPos");
 
     light_dir = Vector3Normalize((raylib::Vector3){0.35f, -1.0f, -0.35f});
     raylib::Color light_color = WHITE;
@@ -121,21 +149,6 @@ int main(int argc, char** argv) {
     SetShaderValue(shadow_shader,
                    GetShaderLocation(shadow_shader, "shadowMapResolution"),
                    &shadowmap_resolution, SHADER_UNIFORM_INT);
-
-    // testing stuff
-    auto floor_shape =
-        floor_handle.GetComponent<gay::Collider, gay::BoxCollider>().shape;
-    JPH::Vec3 extents = floor_shape->GetHalfExtent();
-    floor_model = LoadModelFromMesh(GenMeshCube(
-        extents.GetX(), extents.GetY() + sphere_radius, extents.GetZ()));
-    floor_model.materials[0].shader = shadow_shader;
-
-    auto sphere_shape =
-        sphere_handle.GetComponent<gay::Collider, gay::SphereCollider>().shape;
-    auto radius = sphere_shape->GetRadius();
-    sphere_model = LoadModelFromMesh(GenMeshSphere(radius, 32, 32));
-    sphere_model.materials[0].shader = shadow_shader;
-    //
 
     shadow_map =
         LoadRenderTextureDepthTex(shadowmap_resolution, shadowmap_resolution);
@@ -190,6 +203,7 @@ static raylib::Camera InitLightCamera(raylib::Vector3 light_dir) {
 JPH::uint step = 0;
 static void UpdateDrawFrame(float dt) {
     auto physics_system = world->GetSystem<gay::PhysicsSystem>();
+    auto model_render_system = world->GetSystem<gay::ModelRenderSystem>();
     ++step;
 
     physics_system->Update(gay::DELTA_TIME);
@@ -213,7 +227,7 @@ static void UpdateDrawFrame(float dt) {
     }
 
     light_dir = Vector3Normalize(light_dir);
-    light_camera.position = Vector3Scale(light_dir, -15.0f);
+    light_camera.position = Vector3Scale(light_dir, shadow_distance);
     SetShaderValue(shadow_shader, shadow_shader.locs[SHADER_LOC_VECTOR_VIEW],
                    &camera.position, SHADER_UNIFORM_VEC3);
 
@@ -224,7 +238,7 @@ static void UpdateDrawFrame(float dt) {
     light_view = rlGetMatrixModelview();
     light_proj = rlGetMatrixProjection();
     // physics_system->Render();
-    DrawSphereAndFloor();
+    model_render_system->Render();
 
     light_camera.EndMode();
 
@@ -243,7 +257,7 @@ static void UpdateDrawFrame(float dt) {
 
     camera.BeginMode();
     // physics_system->Render();
-    DrawSphereAndFloor();
+    model_render_system->Render();
     camera.EndMode();
 
     window.EndDrawing();
@@ -283,15 +297,4 @@ static raylib::RenderTexture2D LoadRenderTextureDepthTex(int width,
         TRACELOG(LOG_WARNING, "FBO: Framebuffer object can not be created");
 
     return target;
-}
-
-static void DrawSphereAndFloor() {
-    DrawModelEx(floor_model,
-                floor_handle.GetComponent<gay::Transform>().position,
-                raylib::Vector3(0.0f, 1.0f, 0.0f), 0.0f, raylib::Vector3::One(),
-                raylib::Color::Blue());
-    DrawModelEx(sphere_model,
-                sphere_handle.GetComponent<gay::Transform>().position,
-                raylib::Vector3(0.0f, 1.0f, 0.0f), 0.0f, raylib::Vector3::One(),
-                raylib::Color::Red());
 }

@@ -10,7 +10,6 @@ class PhysicsSystem : public gay::System {
   public:
     void Init() override;
     void Update(float dt) override;
-    void Render() override;
 
     void Cleanup();
 };

@@ -35,4 +35,13 @@ struct RigidBody {
 
     float restitution;
 };
+
+struct ModelRenderer {
+    std::shared_ptr<raylib::Model> model;
+    raylib::Vector3 rotation_axis;
+    float rotation_angle;
+    raylib::Vector3 scale;
+    raylib::Color tint;
+};
+
 } // namespace gay

@@ -312,6 +312,10 @@ class World {
         return component_manager->GetComponent<T>(entity);
     }
 
+    // used to fetch type T from a component you know is stored as a variant,
+    // e.g. Collider=variant<BoxCollider, SphereCollider, ...> -> SphereCollider
+    // my_sphere_collder = world.GetComponent<Collider,
+    // SphereCollider>(my_entity);
     template <typename TMaybeVariant, typename T>
     T& GetComponent(Entity entity) {
         assert(is_variant_v<TMaybeVariant> && "Not variant type");

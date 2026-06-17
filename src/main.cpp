@@ -3,6 +3,7 @@
 #include "rlgl.h"
 
 #include <Jolt/Jolt.h>
+#include <Jolt/Physics/Collision/Shape/MeshShape.h>
 #include <Jolt/Physics/Collision/Shape/ConvexHullShape.h>
 
 #if defined(PLATFORM_WEB)
@@ -78,6 +79,8 @@ int main(int argc, char** argv) {
     auto physics_system = world->RegisterSystem<gay::PhysicsSystem>();
     world->SetSystemSignature<gay::PhysicsSystem, gay::Transform, gay::Collider,
                               gay::RigidBody>();
+    physics_system->PreInit();
+
     auto model_renderer = world->RegisterSystem<gay::ModelRenderSystem>();
     world->SetSystemSignature<gay::ModelRenderSystem, gay::Transform,
                               gay::ModelRenderer>();
@@ -136,14 +139,30 @@ int main(int argc, char** argv) {
         .layer = gay::Layers::NON_MOVING,
         .activation_mode = JPH::EActivation::DontActivate,
     });
-    printf("house mesh count %d\n", house_model->GetMeshCount());
-    auto house_min_bounds = house_model->GetBoundingBox().min;
-    auto house_max_bounds = house_model->GetBoundingBox().max;
-    house_handle.AddComponent(gay::Collider(
-        gay::BoxCollider{.shape = std::make_shared<JPH::BoxShape>(JPH::Vec3(
-                             house_max_bounds.x - house_min_bounds.x,
-                             house_max_bounds.y - house_min_bounds.y,
-                             house_max_bounds.z - house_min_bounds.z))}));
+    house_handle.AddComponent(gay::CreateMeshColliderFromModel(
+        house_model, house_handle.GetComponent<gay::Transform>().position,
+        house_handle.GetComponent<gay::Transform>().rotation));
+
+    // should bounce on top of the house -- to test mesh collider
+    auto sphere_handle = world->CreateEntity();
+    sphere_handle.AddComponent(gay::Transform{
+        .position = raylib::Vector3(1.0f, 20.0f, 1.0f),
+        .rotation = raylib::Quaternion::Identity(),
+    });
+    sphere_handle.AddComponent(gay::Collider(gay::SphereCollider{
+        .shape = std::make_shared<JPH::SphereShape>(1.0f)}));
+    sphere_handle.AddComponent(
+        gay::RigidBody{.motion_type = JPH::EMotionType::Dynamic,
+                       .layer = gay::Layers::MOVING,
+                       .activation_mode = JPH::EActivation::Activate,
+                       .initial_linear_velocity = JPH::Vec3(0.0f, -5.0f, 0.0f),
+                       .restitution = 1.0f});
+    sphere_handle.AddComponent(
+        gay::ModelRenderer{.model = sphere_model,
+                           .rotation_axis = raylib::Vector3(0.0f, 1.0f, 0.0f),
+                           .rotation_angle = 0.0f,
+                           .scale = raylib::Vector3::One(),
+                           .tint = raylib::Color::Yellow()});
 
     MakeABunchOfSpheres(10);
 

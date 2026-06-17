@@ -3,8 +3,13 @@
 
 #include "physics.h"
 #include "raylib-cpp.hpp"
+#include "vector.h"
 
 #include <Jolt/Jolt.h>
+#include <Jolt/Physics/Collision/Shape/StaticCompoundShape.h>
+#include <Jolt/Physics/Collision/Shape/ConvexHullShape.h>
+
+#include <cassert>
 #include <memory>
 #include <variant>
 
@@ -22,7 +27,15 @@ struct BoxCollider {
     std::shared_ptr<JPH::BoxShape> shape;
 };
 
-using Collider = std::variant<SphereCollider, BoxCollider>;
+struct MeshCollider {
+    JPH::Ref<JPH::StaticCompoundShapeSettings> shape;
+};
+
+using Collider = std::variant<SphereCollider, BoxCollider, MeshCollider>;
+
+Collider CreateMeshColliderFromModel(std::shared_ptr<raylib::Model> model,
+                                     raylib::Vector3 position,
+                                     raylib::Quaternion rotation);
 
 struct RigidBody {
     JPH::BodyID id;

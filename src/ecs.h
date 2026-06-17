@@ -241,6 +241,8 @@ class SystemManager {
             auto const& system = pair.second;
             auto const& system_signature = system_type_to_signature_map[type];
 
+            // if system is a subset of entity, e.g. player_entity has A,B,C,D
+            // components, but system cares about A,B we're good
             if ((entity_signature & system_signature) == system_signature) {
                 system->RegisterEntity(entity);
             } else {

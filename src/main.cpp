@@ -34,11 +34,12 @@ raylib::Matrix light_view;
 raylib::Matrix light_proj;
 raylib::Matrix light_view_proj;
 raylib::Vector3 light_dir;
+int light_dir_loc;
 std::shared_ptr<raylib::Model> sphere_model;
 
 gay::EntityHandle house_handle;
 
-static void UpdateDrawFrame(float dt);
+static void UpdateDrawFrame();
 static raylib::Camera InitCamera(void);
 static raylib::Camera InitLightCamera(raylib::Vector3 light_dir);
 static raylib::RenderTexture2D LoadRenderTextureDepthTex(int width, int height);
@@ -56,6 +57,12 @@ int shadow_map_loc;
 
 std::unique_ptr<gay::World> world;
 
+float dt = 0.0f;
+std::chrono::time_point<
+    std::chrono::steady_clock,
+    std::chrono::duration<long long, std::ratio<1LL, 1000000000LL>>>
+    start_time;
+
 int main(int argc, char** argv) {
     SetConfigFlags(FLAG_MSAA_4X_HINT + FLAG_WINDOW_RESIZABLE);
     window.Init(screen_width, screen_height, "Hawk Tuah! 🏳️‍⚧️");
@@ -63,10 +70,16 @@ int main(int argc, char** argv) {
     DisableCursor();
     camera = InitCamera();
 
+#if defined(PLATFORM_WEB)
+    shadow_shader =
+        LoadShader(ASSETS_PATH "shadow_web.vs", ASSETS_PATH "shadow_web.fs");
+#else
     shadow_shader =
         LoadShader(ASSETS_PATH "shadow.vs", ASSETS_PATH "shadow.fs");
+#endif
     shadow_shader.locs[SHADER_LOC_VECTOR_VIEW] =
         GetShaderLocation(shadow_shader, "viewPos");
+    SetupShadowmapStuff();
 
     world = std::make_unique<gay::World>();
     world->Init();
@@ -127,7 +140,9 @@ int main(int argc, char** argv) {
     });
     auto house_model = std::make_shared<raylib::Model>(
         raylib::Model(ASSETS_PATH "house1.glb"));
-    house_model->materials[0].shader = shadow_shader;
+    for (int i = 0; i < house_model->GetMeshCount(); i++) {
+        house_model->materials[i].shader = shadow_shader;
+    }
     house_handle.AddComponent(
         gay::ModelRenderer{.model = house_model,
                            .rotation_axis = raylib::Vector3(0.0f, 1.0f, 0.0f),
@@ -168,15 +183,13 @@ int main(int argc, char** argv) {
 
     physics_system->Init();
 
-    SetupShadowmapStuff();
+    start_time = std::chrono::high_resolution_clock::now();
 #if defined(PLATFORM_WEB)
     emscripten_set_main_loop(UpdateDrawFrame, 0, 1);
 #else
     SetTargetFPS(GetMonitorRefreshRate(window.GetMonitor()));
-    float dt = 0.0f;
     while (!WindowShouldClose()) {
-        auto start_time = std::chrono::high_resolution_clock::now();
-        UpdateDrawFrame(dt);
+        UpdateDrawFrame();
         auto stop_time = std::chrono::high_resolution_clock::now();
         dt = std::chrono::duration<float, std::chrono::seconds::period>(
                  stop_time - start_time)
@@ -218,24 +231,28 @@ static raylib::Camera InitLightCamera(raylib::Vector3 light_dir) {
 JPH::uint step = 0;
 const float camera_speed = 0.05f;
 
-static void UpdateDrawFrame(float dt) {
+static void UpdateDrawFrame() {
+    camera.Update(CAMERA_FIRST_PERSON);
+    SetShaderValue(shadow_shader, shadow_shader.locs[SHADER_LOC_VECTOR_VIEW],
+                   &camera.position, SHADER_UNIFORM_VEC3);
+
     if (raylib::Keyboard::IsKeyPressed(KEY_F11))
         window.ToggleFullscreen();
     if (raylib::Keyboard::IsKeyDown(KEY_LEFT)) {
         if (light_dir.x < 0.6f)
-            light_dir.x += camera_speed * 60.0f * dt;
+            light_dir.x += camera_speed * dt;
     }
     if (raylib::Keyboard::IsKeyDown(KEY_RIGHT)) {
         if (light_dir.x > -0.6f)
-            light_dir.x -= camera_speed * 60.0f * dt;
+            light_dir.x -= camera_speed * dt;
     }
     if (raylib::Keyboard::IsKeyDown(KEY_UP)) {
         if (light_dir.z < 0.6f)
-            light_dir.z += camera_speed * 60.0f * dt;
+            light_dir.z += camera_speed * dt;
     }
     if (raylib::Keyboard::IsKeyDown(KEY_DOWN)) {
         if (light_dir.z > -0.6f)
-            light_dir.z -= camera_speed * 60.0f * dt;
+            light_dir.z -= camera_speed * dt;
     }
 
     auto physics_system = world->GetSystem<gay::PhysicsSystem>();
@@ -244,12 +261,10 @@ static void UpdateDrawFrame(float dt) {
 
     physics_system->Update(gay::DELTA_TIME);
 
-    camera.Update(CAMERA_FIRST_PERSON);
-
     light_dir = Vector3Normalize(light_dir);
     light_camera.position = Vector3Scale(light_dir, shadow_distance);
-    SetShaderValue(shadow_shader, shadow_shader.locs[SHADER_LOC_VECTOR_VIEW],
-                   &camera.position, SHADER_UNIFORM_VEC3);
+    SetShaderValue(shadow_shader, light_dir_loc, &light_dir,
+                   SHADER_UNIFORM_VEC3);
 
     shadow_map.BeginMode();
     window.ClearBackground(raylib::Color::White());
@@ -258,10 +273,10 @@ static void UpdateDrawFrame(float dt) {
     light_view = rlGetMatrixModelview();
     light_proj = rlGetMatrixProjection();
     model_render_system->Render();
-
     light_camera.EndMode();
 
     shadow_map.EndMode();
+
     light_view_proj = light_view.Multiply(light_proj);
 
     window.BeginDrawing();
@@ -278,7 +293,18 @@ static void UpdateDrawFrame(float dt) {
     model_render_system->Render();
     camera.EndMode();
 
+    DrawFPS(10, 10);
+    raylib::DrawText(TextFormat("Current light pos: %02.02f, %02.02f, %02.02f",
+                                light_dir.x, light_dir.y, light_dir.z),
+                     10, 30, 20, raylib::Color::Lime());
+
     window.EndDrawing();
+#if defined(PLATFORM_WEB)
+    auto stop_time = std::chrono::high_resolution_clock::now();
+    dt = std::chrono::duration<float, std::chrono::seconds::period>(stop_time -
+                                                                    start_time)
+             .count();
+#endif
 }
 
 static raylib::RenderTexture2D LoadRenderTextureDepthTex(int width,
@@ -347,10 +373,10 @@ static void MakeABunchOfSpheres(int num_spheres) {
 }
 
 static void SetupShadowmapStuff() {
-    light_dir = Vector3Normalize((raylib::Vector3){0.35f, -1.0f, -0.35f});
+    light_dir = Vector3Normalize((raylib::Vector3){-0.69f, -0.69f, -0.35f});
     raylib::Color light_color = WHITE;
     raylib::Vector4 light_color_normalized = ColorNormalize(light_color);
-    int light_dir_loc = GetShaderLocation(shadow_shader, "lightDir");
+    light_dir_loc = GetShaderLocation(shadow_shader, "lightDir");
     int light_col_loc = GetShaderLocation(shadow_shader, "lightColor");
     SetShaderValue(shadow_shader, light_dir_loc, &light_dir,
                    SHADER_UNIFORM_VEC3);
